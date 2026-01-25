@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { useFonts } from 'expo-font'
 import {
@@ -68,7 +69,8 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
   const [flightError, setFlightError] = useState<string | null>(null)
   const [startInspectionLoading, setStartInspectionLoading] = useState(false)
   const [startInspectionError, setStartInspectionError] = useState<string | null>(null)
-  
+  const insets = useSafeAreaInsets()
+
   const [activeSessions, setActiveSessions] = useState<any[]>([])
   const [activeSessionsLoading, setActiveSessionsLoading] = useState(false)
   const [role, setRole] = useState<string | null>(null)
@@ -103,17 +105,17 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
       } finally {
         if (!cancelled) setFlightLoading(false)
         if (fn) {
-           setActiveSessionsLoading(true)
-           const { data: sessions } = await supabase
-             .from('inspection_sessions')
-             .select('id, started_at, progress_pct, inspector_name')
-             .eq('flight_number', fn) // Query by flight number
-             .eq('status', 'active')
-             .order('started_at', { ascending: false })
-           if (!cancelled) {
-              setActiveSessions(sessions || [])
-              setActiveSessionsLoading(false)
-           }
+          setActiveSessionsLoading(true)
+          const { data: sessions } = await supabase
+            .from('inspection_sessions')
+            .select('id, started_at, progress_pct, inspector_name')
+            .eq('flight_number', fn) // Query by flight number
+            .eq('status', 'active')
+            .order('started_at', { ascending: false })
+          if (!cancelled) {
+            setActiveSessions(sessions || [])
+            setActiveSessionsLoading(false)
+          }
         }
       }
     }
@@ -130,32 +132,32 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
       }
     })
   }, [])
-  
+
   return (
     <View style={styles.container}>
       {showRoleModal && (
         <View style={[styles.container, { position: 'absolute', zIndex: 100, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', padding: 20 }]}>
           <Text style={styles.signedInTitle}>Select your role</Text>
           {['Pilot', 'Flight Attendant', 'Mechanic', 'Ground Crew'].map((r) => (
-             <TouchableOpacity
-               key={r}
-               style={[styles.flightCard, { alignItems: 'center' }]}
-               onPress={async () => {
-                 const { data: { user } } = await supabase.auth.getUser()
-                 if (!user) return
-                 await supabase.from('profiles').upsert({ id: user.id, role: r })
-                 setRole(r)
-                 setShowRoleModal(false)
-               }}
-             >
-               <Text style={styles.flightCardTitle}>{r}</Text>
-             </TouchableOpacity>
+            <TouchableOpacity
+              key={r}
+              style={[styles.flightCard, { alignItems: 'center' }]}
+              onPress={async () => {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user) return
+                await supabase.from('profiles').upsert({ id: user.id, role: r })
+                setRole(r)
+                setShowRoleModal(false)
+              }}
+            >
+              <Text style={styles.flightCardTitle}>{r}</Text>
+            </TouchableOpacity>
           ))}
         </View>
       )}
       <StatusBar style="light" />
       <ScrollView
-        contentContainerStyle={styles.signedInScroll}
+        contentContainerStyle={[styles.signedInScroll, { paddingTop: insets.top || 48 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.signedIn}>
@@ -224,22 +226,22 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
           )}
 
           {!flightLoading && activeSessions.length > 0 && (
-             <View style={{ marginBottom: 20 }}>
-               <Text style={styles.flightCardTitle}>Active Inspections</Text>
-               {activeSessions.map(s => (
-                 <TouchableOpacity 
-                   key={s.id} 
-                   style={styles.flightCard} 
-                   onPress={() => router.push({ pathname: '/inspection/guided', params: { sessionId: s.id } })}
-                 >
-                   <View style={styles.flightCardRow}>
-                      <Text style={styles.flightCardLabel}>{s.inspector_name || 'Inspector'}</Text>
-                      <Text style={[styles.flightCardValue, { color: '#60a5fa' }]}>{s.progress_pct}%</Text>
-                   </View>
-                   <Text style={{ color: '#fafafa', marginTop: 8, fontFamily: 'Inter_500Medium' }}>Join →</Text>
-                 </TouchableOpacity>
-               ))}
-             </View>
+            <View style={{ marginBottom: 20 }}>
+              <Text style={styles.flightCardTitle}>Active Inspections</Text>
+              {activeSessions.map(s => (
+                <TouchableOpacity
+                  key={s.id}
+                  style={styles.flightCard}
+                  onPress={() => router.push({ pathname: '/inspection/guided', params: { sessionId: s.id } })}
+                >
+                  <View style={styles.flightCardRow}>
+                    <Text style={styles.flightCardLabel}>{s.inspector_name || 'Inspector'}</Text>
+                    <Text style={[styles.flightCardValue, { color: '#60a5fa' }]}>{s.progress_pct}%</Text>
+                  </View>
+                  <Text style={{ color: '#fafafa', marginTop: 8, fontFamily: 'Inter_500Medium' }}>Join →</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
 
           <TouchableOpacity
@@ -298,6 +300,7 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const insets = useSafeAreaInsets()
 
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_500Medium,
@@ -392,7 +395,7 @@ export default function AuthScreen() {
     >
       <StatusBar style="light" />
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingTop: (insets.top || 20) + 20 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -404,51 +407,51 @@ export default function AuthScreen() {
             resizeMode="contain"
           />
           <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sign in</Text>
-          <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary]}
-            onPress={signInWithGoogle}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#0a0a0a" />
-            ) : (
-              <>
-                <GoogleIcon />
-                <Text style={styles.btnPrimaryText}>Sign in with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder="you@example.com"
-            placeholderTextColor="#71717a"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-          />
-          <TouchableOpacity
-            style={[styles.btn, styles.btnSecondary]}
-            onPress={signInWithEmail}
-            disabled={loading}
-          >
-            <Text style={styles.btnSecondaryText}>Email me a link</Text>
-          </TouchableOpacity>
-          {message && (
-            <View style={[styles.msg, message.type === 'success' ? styles.msgSuccess : styles.msgError]}>
-              <Text style={[styles.msgText, message.type === 'success' ? styles.msgSuccessText : styles.msgErrorText]}>
-                {message.text}
-              </Text>
+            <Text style={styles.cardTitle}>Sign in</Text>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnPrimary]}
+              onPress={signInWithGoogle}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#0a0a0a" />
+              ) : (
+                <>
+                  <GoogleIcon />
+                  <Text style={styles.btnPrimaryText}>Sign in with Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
             </View>
-          )}
+            <TextInput
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor="#71717a"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
+            <TouchableOpacity
+              style={[styles.btn, styles.btnSecondary]}
+              onPress={signInWithEmail}
+              disabled={loading}
+            >
+              <Text style={styles.btnSecondaryText}>Email me a link</Text>
+            </TouchableOpacity>
+            {message && (
+              <View style={[styles.msg, message.type === 'success' ? styles.msgSuccess : styles.msgError]}>
+                <Text style={[styles.msgText, message.type === 'success' ? styles.msgSuccessText : styles.msgErrorText]}>
+                  {message.text}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>

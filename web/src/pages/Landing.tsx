@@ -13,7 +13,15 @@ export function Landing() {
       </div>
       <div className="hero__right">
         <div className="hero__img-wrapper">
+          <div className="hero__sky" aria-hidden>
+            <span className="hero__line hero__line--1" />
+            <span className="hero__line hero__line--2" />
+            <span className="hero__line hero__line--3" />
+            <span className="hero__line hero__line--4" />
+            <span className="hero__line hero__line--5" />
+          </div>
           <img src="/paper.png" alt="" className="hero__paper" />
+          <img src="/engineer.gif" alt="" className="hero__engineer" />
           <img src="/lilman.gif" alt="" className="hero__lilman" />
         </div>
       </div>

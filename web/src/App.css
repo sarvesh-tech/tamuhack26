@@ -122,7 +122,7 @@
   display: flex;
   align-items: center;
   gap: 2.5rem;
-  padding: 6rem 6rem 4rem;
+  padding: 6rem 0 4rem 6rem;
   margin: 0;
 }
 
@@ -185,14 +185,64 @@
   position: relative;
   width: 100%;
   max-width: 480px;
-  animation: float-paper 6s ease-in-out infinite;
+  animation: float-paper 3s ease-in-out 1 forwards;
+}
+
+.hero__sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  animation: sky-reveal 3s forwards;
+}
+
+@keyframes sky-reveal {
+  0%, 83.33% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.hero__line {
+  display: block;
+  position: absolute;
+  width: 100px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  transform: rotate(-14deg);
+  animation: lines-rush 5s linear infinite;
+}
+.hero__line--1 { top: 18%; animation-delay: 0s; }
+.hero__line--2 { top: 35%; animation-delay: 1s; }
+.hero__line--3 { top: 52%; animation-delay: 2.1s; }
+.hero__line--4 { top: 68%; animation-delay: 3.2s; }
+.hero__line--5 { top: 85%; animation-delay: 4s; }
+
+@keyframes lines-rush {
+  0% { left: 100%; opacity: 0.6; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: -30%; opacity: 0.6; }
 }
 
 .hero__paper {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 130%;
   height: auto;
   filter: drop-shadow(0 25px 50px rgba(0, 0, 0, 0.5));
+  animation: flying-paper 10s ease-in-out infinite 3s;
+}
+
+.hero__engineer {
+  position: absolute;
+  z-index: 2;
+  top: 16%;
+  right: 100;
+  transform: translate(100%, 0);
+  width: 75%;
+  height: auto;
+  animation: gif-fade 2.5s forwards;
 }
 
 .hero__lilman {
@@ -203,19 +253,24 @@
   width: 45%;
   height: auto;
   mix-blend-mode: normal;
-  /* Ensure clear visibility */
+  animation: gif-fade 2.5s forwards;
+}
+
+@keyframes gif-fade {
+  0%, 76% { opacity: 1; }
+  88%, 100% { opacity: 0; }
 }
 
 @keyframes float-paper {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-15px) rotate(1deg); }
+}
 
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-
-  50% {
-    transform: translateY(-15px) rotate(1deg);
-  }
+@keyframes flying-paper {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(25px, -28px) rotate(4deg); }
+  50% { transform: translate(-18px, 12px) rotate(-3deg); }
+  75% { transform: translate(30px, -15px) rotate(3deg); }
 }
 
 /* ------- find-flight ------- */
