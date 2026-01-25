@@ -1,13 +1,7 @@
 {
   "mcpServers": {
     "supabase": {
-      "url": "https://mcp.supabase.com/mcp",
-      "projectId": "hdckomksyoqmadzqkwhm",
-      "command": "npx",
-      "args": ["-y", "@supabase/mcp-server-supabase@latest"],
-      "env": {
-        "SUPABASE_ACCESS_TOKEN": "sbp_70495d2ebbbf019901fd22194aa7a342ae9f3859"
-      }
+      "url": "https://mcp.supabase.com/mcp?project_ref=hdckomksyoqmadzqkwhm"
     }
   }
 }
