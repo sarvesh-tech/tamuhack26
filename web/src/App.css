@@ -1338,6 +1338,11 @@
   color: #86efac;
 }
 
+.dashboard__checklist-item--skipped .dashboard__checklist-item-status {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
 .dashboard__checklist-item-evidence {
   margin-top: 0.5rem;
   display: flex;
@@ -1831,4 +1836,126 @@
 .dashboard__nav-link span {
   font-size: 1.2rem;
   line-height: 1;
+}
+
+.dashboard__checklist-item {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.dashboard__checklist-item-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  width: 100%;
+}
+
+.dashboard__checklist-item--expanded {
+  background: rgba(255,255,255,0.03);
+}
+
+.dashboard__checklist-arrow {
+  margin-left: auto;
+  color: #71717a;
+  font-size: 0.8rem;
+}
+
+.dashboard__checklist-item-body-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard__checklist-item-content {
+  padding: 0 1rem 1rem 1rem;
+}
+
+.dashboard__form-label {
+  display: block;
+  color: #a1a1aa;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard__checklist-item {
+  /* Match Find Flight Tiles */
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dashboard__checklist-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.dashboard__checklist-item--completed {
+  border-left: 4px solid #22c55e;
+}
+
+.dashboard__checklist-item--skipped {
+  border-left: 4px solid #fbbf24;
+}
+
+.dashboard__checklist-item--in_progress {
+  border-left: 4px solid #60a5fa;
+}
+
+.dashboard__checklist-item--pending {
+  border-left: 4px solid rgba(255,255,255,0.1);
+}
+
+/* AI Severity Badges */
+.dashboard__badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-left: 0.5rem;
+}
+
+.dashboard__badge--high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.dashboard__badge--medium {
+  background: rgba(234, 179, 8, 0.2);
+  color: #fde047;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.dashboard__badge--low {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+/* AI Analysis Text */
+.dashboard__ai-analysis {
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #d8b4fe;
+  display: flex;
+  gap: 0.5rem;
+  align-items: start;
+}
+
+/* Pending Styling override */
+.dashboard__checklist-item--pending {
+  border-left: 4px solid #52525b; /* Zinc-600 */
+}
+
+/* Full Width Accordion Content */
+.dashboard__checklist-item-content {
+  width: 100%;
+  box-sizing: border-box;
 }

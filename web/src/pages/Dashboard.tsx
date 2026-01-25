@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link, useSearchParams } from "react-router-dom";
 import type { Flight } from "../lib/flightEngine";
-import { INSPECTION_STEPS } from "../constants/inspectionSteps";
+import { INSPECTION_STEPS, type Role } from "../constants/inspectionSteps";
 import {
     useInspectionSession,
     type InspectionStepInstance,
@@ -19,266 +19,235 @@ const TABS: { id: TabId; label: string }[] = [
     { id: "inspections", label: "Inspections" },
 ];
 
-function ChecklistStepRow({
-    stepId,
-    title,
-    status,
-    photoPath,
-    transcript,
-    onClick,
+// Basic SpeechRecognition type
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+}
+interface SpeechRecognitionEvent {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+declare global {
+  interface Window {
+    SpeechRecognition: { new (): SpeechRecognition };
+    webkitSpeechRecognition: { new (): SpeechRecognition };
+  }
+}
+
+function ChecklistAccordionRow({
+  step,
+  dbStep,
+  sessionId,
+  expanded,
+  onToggle,
+  onUpdate
 }: {
-    stepId: number;
-    title: string;
-    status: "pending" | "in_progress" | "completed" | "skipped";
-    photoPath: string | null;
-    transcript: string | null;
-    onClick?: () => void;
+  step: (typeof INSPECTION_STEPS)[number]
+  dbStep: InspectionStepInstance | undefined
+  sessionId: string
+  expanded: boolean
+  onToggle: () => void
+  onUpdate: () => void
 }) {
-    const { url } = useInspectionPhotoUrl(photoPath);
-    return (
-        <div
-            className={`dashboard__checklist-item dashboard__checklist-item--${status} ${onClick ? "dashboard__checklist-item--clickable" : ""}`}
-            onClick={onClick}
-            role={onClick ? "button" : undefined}
-            tabIndex={onClick ? 0 : undefined}
-        >
-            <span className="dashboard__checklist-item-num">{stepId}</span>
-            <div className="dashboard__checklist-item-body">
-                <div className="dashboard__checklist-item-title">{title}</div>
-                <span className="dashboard__checklist-item-status">
-                    {status.replace("_", " ")}
-                </span>
-                {status === "completed" && (photoPath || transcript) && (
-                    <div className="dashboard__checklist-item-evidence">
-                        {url && (
-                            <img
-                                src={url}
-                                alt=""
-                                className="dashboard__checklist-item-thumb"
+  const status = (dbStep?.status ?? 'pending') as 'pending' | 'in_progress' | 'completed' | 'skipped'
+  const [transcript, setTranscript] = useState(dbStep?.transcript || '')
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [listening, setListening] = useState(false)
+  const { url } = useInspectionPhotoUrl(dbStep?.photo_path ?? null)
+
+  // Sync prop changes to local state when expanded
+  useEffect(() => {
+    if (expanded && dbStep) {
+        setTranscript(dbStep.transcript || '')
+    }
+  }, [expanded, dbStep])
+
+  // AI simulation removed for MVP - database columns not yet available
+
+  const handleSpeech = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Voice recognition not supported in this browser.');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const text = event.results[0][0].transcript;
+      setTranscript((prev) => prev ? prev + ' ' + text : text);
+      setListening(false);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech error', event.error);
+      setListening(false);
+    };
+    
+    setListening(true);
+    recognition.start();
+  }
+
+  const handleUpdate = async (newStatus: 'completed' | 'skipped') => {
+    setLoading(true)
+    try {
+      let photoPath = dbStep?.photo_path ?? null
+
+      if (photoFile && photoFile.name) {
+        const ext = photoFile.name.split('.').pop()
+        const path = `sessions/${sessionId}/steps/${step.id}/${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('inspection-evidence')
+          .upload(path, photoFile, { upsert: true })
+        if (upErr) {
+          console.warn('Photo upload failed:', upErr)
+          // Continue anyway for MVP demo
+        } else {
+          photoPath = path
+        }
+      }
+
+      const { error } = await supabase
+        .from('inspection_step_instances')
+        .upsert({
+          session_id: sessionId,
+          step_id: step.id,
+          title: step.title,
+          status: newStatus,
+          completed_at: new Date().toISOString(),
+          photo_path: photoPath,
+          transcript: transcript || null
+        }, { onConflict: 'session_id, step_id' })
+
+      if (error) throw error
+      onUpdate()
+      onToggle()
+    } catch (e: any) {
+      alert(`Failed to update step: ${e.message || 'Unknown error'}`)
+      console.error('Update Step Error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className={`dashboard__checklist-item dashboard__checklist-item--${status} ${expanded ? 'dashboard__checklist-item--expanded' : ''}`}>
+      <div 
+        className="dashboard__checklist-item-header" 
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+      >
+        <span className="dashboard__checklist-item-num">{step.id}</span>
+        <div className="dashboard__checklist-item-body-text">
+            <div className="dashboard__checklist-item-title">
+                {step.title}
+            </div>
+            <span className="dashboard__checklist-item-status">{status.replace('_', ' ')}</span>
+        </div>
+        <span className="dashboard__checklist-arrow">{expanded ? '▲' : '▼'}</span>
+      </div>
+      
+      {expanded && (
+        <div className="dashboard__checklist-item-content">
+          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '8px', width: '100%' }}>
+
+             {/* Read-Only or Edit View */}
+             {(status === 'completed' || status === 'skipped') && !photoFile ? (
+                <div className="dashboard__checklist-evidence-view">
+                   {url && <img src={url} alt="" className="dashboard__checklist-item-thumb-large" style={{ maxWidth: '100%', borderRadius: 8, marginBottom: 12 }} />}
+                   {dbStep?.transcript && <p className="dashboard__checklist-transcript-text">{dbStep.transcript}</p>}
+                   <button 
+                     className="dashboard__join-btn" 
+                     onClick={() => setPhotoFile({} as any)} // Hack to trigger edit mode visual or just use a state 'isEditing'
+                     style={{ marginTop: 12, backgroundColor: '#27272a' }}
+                   >
+                     Edit Evidence / Status
+                   </button>
+                </div>
+             ) : (
+                <div className="dashboard__checklist-form">
+                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                        <label className="dashboard__join-btn" style={{ flex: 1, cursor: 'pointer', textAlign: 'center', backgroundColor: photoFile ? '#22c55e' : 'rgba(255,255,255,0.08)', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0, fontSize: '0.85rem' }}>
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              capture="environment"
+                              onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+                              style={{ display: 'none' }}
                             />
-                        )}
-                        {transcript && (
-                            <span className="dashboard__checklist-item-transcript">
-                                {transcript}
-                            </span>
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
-
-function PerformStepModal({
-    step,
-    onClose,
-    onUpdate,
-}: {
-    step: InspectionStepInstance;
-    onClose: () => void;
-    onUpdate: () => void;
-}) {
-    const [transcript, setTranscript] = useState(step.transcript || "");
-    const [photoFile, setPhotoFile] = useState<File | null>(null);
-    const [loading, setLoading] = useState(false);
-
-    const handleComplete = async () => {
-        setLoading(true);
-        try {
-            let photoPath = step.photo_path;
-
-            // Upload photo if new selected
-            if (photoFile) {
-                const ext = photoFile.name.split(".").pop();
-                const path = `sessions/${step.session_id}/steps/${step.step_id}/${Date.now()}.${ext}`;
-                const { error: upErr } = await supabase.storage
-                    .from("inspection-evidence")
-                    .upload(path, photoFile, { upsert: true });
-
-                if (upErr) throw upErr;
-                photoPath = path;
-            }
-
-            const { error } = await supabase
-                .from("inspection_step_instances")
-                .upsert(
-                    {
-                        id: step.id, // if id exists
-                        session_id: step.session_id,
-                        step_id: step.step_id,
-                        title: step.title,
-                        status: "completed",
-                        completed_at: new Date().toISOString(),
-                        photo_path: photoPath,
-                        transcript: transcript,
-                    },
-                    { onConflict: "session_id, step_id" },
-                );
-
-            if (error) throw error;
-            onUpdate();
-            onClose();
-        } catch (e) {
-            alert("Error updating step");
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSkip = async () => {
-        setLoading(true);
-        try {
-            const { error } = await supabase
-                .from("inspection_step_instances")
-                .upsert(
-                    {
-                        session_id: step.session_id,
-                        step_id: step.step_id,
-                        title: step.title,
-                        status: "skipped",
-                        completed_at: new Date().toISOString(),
-                        // keep existing photo/transcript if any, or clear? Mobile currently clears/doesn't send.
-                        // Let's keep them if they exist in DB, otherwise null.
-                        // Actually upsert might overwrite. Mobile implementation overwrote with null.
-                        photo_path: null,
-                        transcript: null,
-                    },
-                    { onConflict: "session_id, step_id" },
-                );
-
-            if (error) throw error;
-            onUpdate();
-            onClose();
-        } catch (e) {
-            alert("Failed to skip");
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="modal">
-            <div className="modal__backdrop" onClick={onClose} />
-            <div className="modal__box">
-                <div className="modal__head">
-                    <h3 className="modal__title">{step.title}</h3>
-                    <button
-                        type="button"
-                        className="modal__close"
-                        onClick={onClose}
-                    >
-                        ×
-                    </button>
-                </div>
-                <div className="modal__body">
-                    <div style={{ marginBottom: "1rem" }}>
-                        <label
-                            style={{
-                                display: "block",
-                                color: "#a1a1aa",
-                                fontSize: "0.9rem",
-                                marginBottom: "0.5rem",
-                            }}
-                        >
-                            Photo Evidence
+                            {photoFile ? 'Photo Selected' : '📷 Photo'}
                         </label>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            className="find-flight__input"
-                            onChange={(e) =>
-                                setPhotoFile(e.target.files?.[0] ?? null)
-                            }
-                        />
-                        {step.photo_path && !photoFile && (
-                            <p
-                                style={{
-                                    fontSize: "0.8rem",
-                                    color: "#71717a",
-                                    marginTop: "0.5rem",
-                                }}
-                            >
-                                Current photo exists. Uploading new one will
-                                replace it.
-                            </p>
-                        )}
-                    </div>
-
-                    <div style={{ marginBottom: "1rem" }}>
-                        <label
-                            style={{
-                                display: "block",
-                                color: "#a1a1aa",
-                                fontSize: "0.9rem",
-                                marginBottom: "0.5rem",
-                            }}
+                        
+                        <button 
+                             type="button"
+                             className="dashboard__join-btn"
+                             onClick={handleSpeech}
+                             style={{ flex: 1, backgroundColor: listening ? '#ef4444' : 'rgba(255,255,255,0.08)', animation: listening ? 'pulse 1s infinite' : 'none', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0, fontSize: '0.85rem' }}
                         >
-                            Notes / Transcript
-                        </label>
-                        <textarea
-                            className="find-flight__input"
-                            value={transcript}
-                            onChange={(e) => setTranscript(e.target.value)}
-                            rows={3}
-                            placeholder="Add observations..."
-                            style={{ resize: "vertical" }}
-                        />
-                    </div>
-
-                    <div style={{ display: "flex", gap: "1rem" }}>
-                        <button
-                            className="dashboard__join-btn"
-                            onClick={handleSkip}
-                            disabled={loading}
-                            style={{
-                                flex: 1,
-                                backgroundColor: "rgba(255,255,255,0.05)",
-                                color: "#a1a1aa",
-                                borderColor: "transparent",
-                            }}
-                        >
-                            Skip
+                             {listening ? 'Listening...' : '🎤 Note'}
                         </button>
-                        <button
-                            className="dashboard__join-btn dashboard__join-btn--primary"
-                            onClick={handleComplete}
-                            disabled={loading}
-                            style={{ flex: 2 }}
+                    </div>
+
+                    {photoFile && <p style={{ fontSize: '0.8rem', color: '#a1a1aa', marginBottom: '1rem', textAlign: 'center' }}>Ready to upload: {photoFile.name}</p>}
+                    
+                    <textarea 
+                      className="find-flight__input"
+                      rows={3}
+                      value={transcript}
+                      onChange={(e) => setTranscript(e.target.value)}
+                      placeholder="Notes will appear here..."
+                      style={{ marginBottom: '1rem', resize: 'vertical' }}
+                    />
+                    
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                        <button 
+                          className="dashboard__join-btn"
+                          disabled={loading}
+                          onClick={() => handleUpdate('skipped')}
+                          style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', color: '#fbbf24', height: '42px', padding: 0, margin: 0, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'none' }}
                         >
-                            {loading ? "Saving…" : "Complete Step"}
+                          Skip
+                        </button>
+                        <button 
+                          className="dashboard__join-btn dashboard__join-btn--primary"
+                          disabled={loading}
+                          onClick={() => handleUpdate('completed')}
+                          style={{ flex: 1, height: '42px', margin: 0, padding: 0, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'none' }}
+                        >
+                          {loading ? 'Saving...' : 'Complete'}
                         </button>
                     </div>
                 </div>
-            </div>
+             )}
+          </div>
         </div>
-    );
+      )}
+    </div>
+  )
 }
 
-function mergeStep(
-    step: (typeof INSPECTION_STEPS)[number],
-    dbSteps: InspectionStepInstance[],
-): {
-    stepId: number;
-    title: string;
-    status: "pending" | "in_progress" | "completed" | "skipped";
-    photoPath: string | null;
-    transcript: string | null;
-} {
-    const db = dbSteps.find((s) => s.step_id === step.id);
-    return {
-        stepId: step.id,
-        title: step.title,
-        status: (db?.status ?? "pending") as
-            | "pending"
-            | "in_progress"
-            | "completed"
-            | "skipped",
-        photoPath: db?.photo_path ?? null,
-        transcript: db?.transcript ?? null,
-    };
-}
+
+
+
 
 function formatStartedAt(iso: string): string {
     const d = new Date(iso);
@@ -344,8 +313,26 @@ export function Dashboard() {
     const [searchParams, setSearchParams] = useSearchParams();
     const sessionId = searchParams.get("sessionId");
     const [activeTab, setActiveTab] = useState<TabId>("overview");
-    const [editingStep, setEditingStep] =
-        useState<InspectionStepInstance | null>(null);
+    const [editingStep, setEditingStep] = useState<InspectionStepInstance | null>(null);
+    const [userRole, setUserRole] = useState<Role | null>(null);
+
+    useEffect(() => {
+        // Fetch user role from profiles table
+        supabase.auth.getUser().then(async ({ data: { user } }) => {
+            if (!user) return
+            const { data, error } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+            if (error) console.error('Profile fetch error:', error)
+            if (data?.role) setUserRole(data.role as Role)
+        })
+    }, [])
+    
+    const changeRole = async (newRole: string) => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+            await supabase.from('profiles').upsert({ id: user.id, role: newRole })
+            setUserRole(newRole as Role)
+        }
+    }
 
     const { session, steps, loading, error, endSession, cancelSession } =
         useInspectionSession(sessionId);
@@ -370,7 +357,7 @@ export function Dashboard() {
         : "—";
 
     const completedSteps = (steps ?? [])
-        .filter((s) => s.status === "completed" && s.completed_at)
+        .filter((s) => (s.status === "completed" || s.status === "skipped") && s.completed_at)
         .sort((a, b) =>
             (b.completed_at ?? "").localeCompare(a.completed_at ?? ""),
         );
@@ -460,6 +447,12 @@ export function Dashboard() {
                     >
                         <span>←</span> Back to Flights
                     </Link>
+                    {userRole && (
+                        <div style={{ marginTop: '1rem', padding: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                            <p style={{ fontSize: '0.8rem', color: '#a1a1aa', marginBottom: '0.5rem' }}>Role: <strong style={{ color: '#fafafa' }}>{userRole}</strong></p>
+                            <button className="find-flight__detail-back" style={{ fontSize: '0.75rem' }} onClick={() => setUserRole(null)}>Change</button>
+                        </div>
+                    )}
                 </div>
             </aside>
             <main className="dashboard__main">
@@ -623,80 +616,46 @@ export function Dashboard() {
                                 )}
 
                                 {sessionId && session && (
+                                    <>
+                                    {!userRole && (
+                                        <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', marginBottom: '2rem' }}>
+                                            <h3 style={{ marginBottom: '1rem', color: '#fafafa' }}>Please Select Your Role</h3>
+                                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                                {['Pilot', 'Flight Attendant', 'Mechanic', 'Ground Crew'].map(r => (
+                                                    <button 
+                                                        key={r} 
+                                                        className="dashboard__join-btn"
+                                                        onClick={() => changeRole(r)}
+                                                        style={{ background: 'rgba(255,255,255,0.1)' }}
+                                                    >
+                                                        {r}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="dashboard__checklist-list">
-                                        {INSPECTION_STEPS.map((step) => {
-                                            const m = mergeStep(step, steps);
+                                        {INSPECTION_STEPS.filter(s => !userRole || !s.allowedRoles || (s.allowedRoles as any).includes(userRole)).map((step) => {
+                                            const dbStep = steps.find(s => s.step_id === step.id)
                                             return (
-                                                <ChecklistStepRow
+                                                <ChecklistAccordionRow
                                                     key={step.id}
-                                                    stepId={m.stepId}
-                                                    title={m.title}
-                                                    status={m.status}
-                                                    photoPath={m.photoPath}
-                                                    transcript={m.transcript}
-                                                    onClick={
-                                                        m.status ===
-                                                            "completed" ||
-                                                        m.status ===
-                                                            "skipped" ||
-                                                        m.status ===
-                                                            "pending" ||
-                                                        m.status ===
-                                                            "in_progress"
-                                                            ? () => {
-                                                                  // Need the full DB object including session_id
-                                                                  // If in local steps array, use it. If not (pending), construct a partial one.
-                                                                  let db =
-                                                                      steps.find(
-                                                                          (s) =>
-                                                                              s.step_id ===
-                                                                              step.id,
-                                                                      );
-                                                                  if (!db) {
-                                                                      db = {
-                                                                          id:
-                                                                              "temp-" +
-                                                                              step.id, // Only works if we upsert by session_id, step_id
-                                                                          session_id:
-                                                                              sessionId,
-                                                                          step_id:
-                                                                              step.id,
-                                                                          title: step.title,
-                                                                          status: "pending",
-                                                                          started_at:
-                                                                              null,
-                                                                          completed_at:
-                                                                              null,
-                                                                          photo_path:
-                                                                              null,
-                                                                          transcript:
-                                                                              null,
-                                                                      };
-                                                                  }
-                                                                  setEditingStep(
-                                                                      db,
-                                                                  );
-                                                              }
-                                                            : undefined
-                                                    }
+                                                    step={step}
+                                                    dbStep={dbStep}
+                                                    sessionId={sessionId}
+                                                    expanded={editingStep?.step_id === step.id} // Reusing editingStep state to track expansion
+                                                    onToggle={() => setEditingStep(editingStep?.step_id === step.id ? null : { step_id: step.id } as any)}
+                                                    onUpdate={() => {}} // Auto-updates via hook
                                                 />
                                             );
                                         })}
                                     </div>
+                                    </>
                                 )}
                             </div>
                         </section>
 
-                        {editingStep && (
-                            <PerformStepModal
-                                step={editingStep}
-                                onClose={() => setEditingStep(null)}
-                                // Changes are handled internally in modal now, but we might want to force a refresh if channels don't catch it fast enough?
-                                // Currently channel subscription handles 'postgres_changes', so it should auto-update.
-                                // We passed onUpdate just in case logic needs it, but we can leave it empty or trigger something.
-                                onUpdate={() => {}}
-                            />
-                        )}
+
 
                         <aside
                             className="dashboard__progress-panel"
@@ -704,8 +663,25 @@ export function Dashboard() {
                         >
                             <div className="dashboard__progress-header">
                                 <h2 className="dashboard__progress-panel-title">
-                                    Inspection Progress
+                                    Flight Status
                                 </h2>
+                                
+                                {/* Discord-style Status */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px' }}>
+                                    <div style={{ 
+                                        width: 10, height: 10, borderRadius: '50%', 
+                                        backgroundColor: session?.progress_pct === 100 ? '#22c55e' : 
+                                                         (session?.progress_pct ?? 0) > 60 ? '#f59e0b' : '#ef4444',
+                                        boxShadow: session?.progress_pct === 100 ? '0 0 8px #22c55e' : 'none'
+                                    }} />
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fafafa' }}>
+                                        {session?.progress_pct === 100 ? "Ready to Fly" : 
+                                         (session?.progress_pct ?? 0) > 80 ? "Ready for Pushback" :
+                                         (session?.progress_pct ?? 0) > 50 ? "Final Checks" :
+                                         (session?.progress_pct ?? 0) > 20 ? "Boarding" : "Cabin Prep"}
+                                    </span>
+                                </div>
+
                                 <span className="dashboard__progress-badge">
                                     {session
                                         ? `${session.progress_pct}%`

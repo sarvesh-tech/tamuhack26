@@ -26,6 +26,8 @@ export type InspectionStepInstance = {
   completed_at: string | null
   photo_path: string | null
   transcript: string | null
+  ai_severity?: 'low' | 'medium' | 'high' | null
+  ai_analysis?: string | null
 }
 
 export function useInspectionSession(sessionId: string | null) {

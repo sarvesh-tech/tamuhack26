@@ -6,6 +6,7 @@ export type ActiveSession = {
   started_at: string
   progress_pct: number
   flight_number?: string | null
+  inspector_id?: string
 }
 
 export function useActiveInspectionSessions(enabled: boolean, flightNumber?: string | null, fetchAll: boolean = false) {
@@ -39,7 +40,7 @@ export function useActiveInspectionSessions(enabled: boolean, flightNumber?: str
 
       let query = supabase
         .from('inspection_sessions')
-        .select('id, started_at, progress_pct, flight_number')
+        .select('id, started_at, progress_pct, flight_number, inspector_id')
 
       if (fetchAll) {
         // Query all active 
