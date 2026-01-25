@@ -20,10 +20,12 @@ import {
 import { Inter_400Regular, Inter_500Medium } from '@expo-google-fonts/inter'
 import * as WebBrowser from 'expo-web-browser'
 import * as Linking from 'expo-linking'
+import { useRouter } from 'expo-router'
 import type { Session } from '@supabase/supabase-js'
 import Svg, { Path } from 'react-native-svg'
 import { supabase } from '@/lib/supabase'
 import { getFlights, type Flight } from '@/lib/flightEngine'
+import { INSPECTION_STEPS } from '@/constants/inspectionSteps'
 
 const PRE_HEADLINE = 'REAL-TIME INSPECTION VERIFICATION FOR FLIGHT OPERATIONS.'
 
@@ -59,10 +61,13 @@ function formatDateTime(iso: string): string {
 }
 
 function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+  const router = useRouter()
   const [userFlightNumber, setUserFlightNumber] = useState<string | null>(null)
   const [flight, setFlight] = useState<Flight | null>(null)
   const [flightLoading, setFlightLoading] = useState(true)
   const [flightError, setFlightError] = useState<string | null>(null)
+  const [startInspectionLoading, setStartInspectionLoading] = useState(false)
+  const [startInspectionError, setStartInspectionError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -168,6 +173,43 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
             <View style={styles.flightCard}>
               <Text style={styles.flightCardMuted}>No flight selected. Choose one on the web app.</Text>
             </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.startInspectionBtn, startInspectionLoading && styles.startInspectionBtnDisabled]}
+            onPress={async () => {
+              setStartInspectionError(null)
+              setStartInspectionLoading(true)
+              try {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user) throw new Error('Not signed in')
+                const { data: sessionRow, error: sessionErr } = await supabase
+                  .from('inspection_sessions')
+                  .insert({ inspector_id: user.id })
+                  .select('id')
+                  .single()
+                if (sessionErr || !sessionRow) throw sessionErr || new Error('Failed to create session')
+                const { error: stepsErr } = await supabase
+                  .from('inspection_step_instances')
+                  .insert(INSPECTION_STEPS.map((s) => ({ session_id: sessionRow.id, step_id: s.id, title: s.title, status: 'pending' })))
+                if (stepsErr) throw stepsErr
+                router.replace({ pathname: '/inspection/guided', params: { sessionId: sessionRow.id } })
+              } catch (e) {
+                setStartInspectionError(e instanceof Error ? e.message : 'Failed to start inspection')
+              } finally {
+                setStartInspectionLoading(false)
+              }
+            }}
+            disabled={startInspectionLoading}
+          >
+            {startInspectionLoading ? (
+              <ActivityIndicator size="small" color="#0a0a0a" />
+            ) : (
+              <Text style={styles.startInspectionBtnText}>Start Inspection</Text>
+            )}
+          </TouchableOpacity>
+          {startInspectionError && (
+            <Text style={styles.startInspectionError}>{startInspectionError}</Text>
           )}
 
           <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut}>
@@ -551,6 +593,30 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: '#a1a1aa',
+  },
+  startInspectionBtn: {
+    alignSelf: 'stretch',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    backgroundColor: '#22c55e',
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  startInspectionBtnDisabled: {
+    opacity: 0.7,
+  },
+  startInspectionBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    color: '#0a0a0a',
+  },
+  startInspectionError: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: '#fca5a5',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   signOutBtn: {
     paddingVertical: 12,

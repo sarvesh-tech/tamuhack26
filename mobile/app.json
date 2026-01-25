@@ -9,9 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to record voice notes for inspection steps."
+      }
     },
     "android": {
+      "permissions": ["android.permission.RECORD_AUDIO"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -27,6 +31,10 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        { "cameraPermission": "Allow $(PRODUCT_NAME) to access the camera for inspection photos." }
+      ],
       [
         "expo-splash-screen",
         {

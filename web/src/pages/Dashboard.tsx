@@ -1,6 +1,10 @@
 import { useState } from 'react'
-import { useLocation, Link } from 'react-router-dom'
+import { useLocation, Link, useSearchParams } from 'react-router-dom'
 import type { Flight } from '../lib/flightEngine'
+import { INSPECTION_STEPS } from '../constants/inspectionSteps'
+import { useInspectionSession, type InspectionStepInstance } from '../hooks/useInspectionSession'
+import { useInspectionPhotoUrl } from '../hooks/useInspectionPhotoUrl'
+import { useActiveInspectionSessions } from '../hooks/useActiveInspectionSessions'
 
 type TabId = 'overview' | 'audit-logs' | 'inspections'
 
@@ -10,72 +14,74 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'inspections', label: 'Inspections' },
 ]
 
-const ROWS = 30
-const COLS = 6
-const SEAT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
-
-// Seat status types
-type SeatStatus = 'available' | 'inspected' | 'problem'
-
-// Mock inspection data - replace with real API data
-interface InspectionProgress {
-  totalSeats: number
-  inspectedSeats: number
-  problemSeats: number
-  percentComplete: number
-  lastUpdated: string
+function ChecklistStepRow({
+  stepId,
+  title,
+  status,
+  photoPath,
+  transcript,
+}: {
+  stepId: number
+  title: string
+  status: 'pending' | 'in_progress' | 'completed'
+  photoPath: string | null
+  transcript: string | null
+}) {
+  const { url } = useInspectionPhotoUrl(photoPath)
+  return (
+    <div className={`dashboard__checklist-item dashboard__checklist-item--${status}`}>
+      <span className="dashboard__checklist-item-num">{stepId}</span>
+      <div className="dashboard__checklist-item-body">
+        <div className="dashboard__checklist-item-title">{title}</div>
+        <span className="dashboard__checklist-item-status">{status.replace('_', ' ')}</span>
+        {status === 'completed' && (photoPath || transcript) && (
+          <div className="dashboard__checklist-item-evidence">
+            {url && <img src={url} alt="" className="dashboard__checklist-item-thumb" />}
+            {transcript && <span className="dashboard__checklist-item-transcript">{transcript}</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
-// Mock problem seats - replace with real data from backend
-const MOCK_PROBLEM_SEATS = new Set(['3C', '7A', '12F', '18B', '25D'])
-const MOCK_INSPECTED_SEATS = new Set([
-  '1A', '1B', '1C', '1D', '1E', '1F',
-  '2A', '2B', '2C', '2D', '2E', '2F',
-  '3A', '3B', '3C', '3D', '3E', '3F',
-  '4A', '4B', '5A', '7A', '7B', '7C',
-  '10A', '10B', '12F', '15A', '18B',
-])
-
-function getSeatId(row: number, col: number): string {
-  return `${row + 1}${SEAT_LETTERS[col]}`
+function mergeStep(
+  step: (typeof INSPECTION_STEPS)[number],
+  dbSteps: InspectionStepInstance[]
+): { stepId: number; title: string; status: 'pending' | 'in_progress' | 'completed'; photoPath: string | null; transcript: string | null } {
+  const db = dbSteps.find((s) => s.step_id === step.id)
+  return {
+    stepId: step.id,
+    title: step.title,
+    status: (db?.status ?? 'pending') as 'pending' | 'in_progress' | 'completed',
+    photoPath: db?.photo_path ?? null,
+    transcript: db?.transcript ?? null,
+  }
 }
 
-function getSeatStatus(seatId: string): SeatStatus {
-  if (MOCK_PROBLEM_SEATS.has(seatId)) return 'problem'
-  if (MOCK_INSPECTED_SEATS.has(seatId)) return 'inspected'
-  return 'available'
+function formatStartedAt(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffM = Math.floor(diffMs / 60000)
+  if (diffM < 1) return 'Just now'
+  if (diffM < 60) return `${diffM} min ago`
+  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
 }
 
 export function Dashboard() {
   const { state } = useLocation() as { state?: { flight: Flight } | null }
+  const [searchParams, setSearchParams] = useSearchParams()
+  const sessionId = searchParams.get('sessionId')
   const flight = state?.flight ?? null
   const [activeTab, setActiveTab] = useState<TabId>('overview')
-  const [selectedSeats, setSelectedSeats] = useState<Set<string>>(new Set())
 
-  const totalSeats = flight?.aircraft.passengerCapacity.total ?? ROWS * COLS
-  const seatCount = Math.min(ROWS * COLS, totalSeats)
+  const { session, steps, loading, error } = useInspectionSession(sessionId)
+  const { sessions: activeSessions, loading: activeLoading, error: activeError } = useActiveInspectionSessions(!sessionId)
 
-  // Calculate inspection progress
-  const inspectionProgress: InspectionProgress = {
-    totalSeats: seatCount,
-    inspectedSeats: MOCK_INSPECTED_SEATS.size,
-    problemSeats: MOCK_PROBLEM_SEATS.size,
-    percentComplete: Math.round((MOCK_INSPECTED_SEATS.size / seatCount) * 100),
-    lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  }
-
-  function toggleSeat(id: string) {
-    setSelectedSeats((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function includesSeat(r: number, c: number): boolean {
-    return r * 6 + c < seatCount
-  }
+  const lastUpdated = session?.updated_at
+    ? new Date(session.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '—'
 
   return (
     <div className="dashboard">
@@ -98,137 +104,120 @@ export function Dashboard() {
       <main className="dashboard__main">
         {activeTab === 'overview' ? (
           <div className="dashboard__overview-wrap">
-            <section className="dashboard__seats-section" aria-label="Seat map">
-              <div className="dashboard__seats-head">
-                <h2 className="dashboard__seats-title">Seat Map</h2>
-                <p className="dashboard__seats-legend">
-                  <span className="dashboard__seats-legend-item"><em className="dashboard__seats-legend-swatch" /> Available</span>
-                  <span className="dashboard__seats-legend-item"><em className="dashboard__seats-legend-swatch dashboard__seats-legend-swatch--inspected" /> Inspected</span>
-                  <span className="dashboard__seats-legend-item"><em className="dashboard__seats-legend-swatch dashboard__seats-legend-swatch--problem" /> Problem</span>
-                  <span className="dashboard__seats-legend-item"><em className="dashboard__seats-legend-swatch dashboard__seats-legend-swatch--selected" /> Selected</span>
-                </p>
-              </div>
-              <div className="dashboard__seat-grid-wrap">
-                <div className="dashboard__seat-grid">
-                  {Array.from({ length: 15 }, (_, i) => i).map((r) => (
-                    <div key={r} className="dashboard__seat-row">
-                      <span className="dashboard__seat-row-num">{r + 1}</span>
-                      {[0, 1, 2].map((c) => {
-                        const id = getSeatId(r, c)
-                        const status = getSeatStatus(id)
-                        if (!includesSeat(r, c)) return <span key={c} className="dashboard__seat dashboard__seat--spacer" aria-hidden />
-                        return (
-                          <button
-                            key={c}
-                            type="button"
-                            className={`dashboard__seat ${status === 'problem' ? 'dashboard__seat--problem' : ''} ${status === 'inspected' ? 'dashboard__seat--inspected' : ''} ${selectedSeats.has(id) ? 'dashboard__seat--selected' : ''}`}
-                            onClick={() => toggleSeat(id)}
-                            aria-pressed={selectedSeats.has(id)}
-                            aria-label={`Seat ${id}${status === 'problem' ? ' - Problem detected' : status === 'inspected' ? ' - Inspected' : ''}`}
-                            title={id}
-                          >
-                            {id.slice(-1)}
-                          </button>
-                        )
-                      })}
-                      <span className="dashboard__aisle" aria-hidden />
-                      {[3, 4, 5].map((c) => {
-                        const id = getSeatId(r, c)
-                        const status = getSeatStatus(id)
-                        if (!includesSeat(r, c)) return <span key={c} className="dashboard__seat dashboard__seat--spacer" aria-hidden />
-                        return (
-                          <button
-                            key={c}
-                            type="button"
-                            className={`dashboard__seat ${status === 'problem' ? 'dashboard__seat--problem' : ''} ${status === 'inspected' ? 'dashboard__seat--inspected' : ''} ${selectedSeats.has(id) ? 'dashboard__seat--selected' : ''}`}
-                            onClick={() => toggleSeat(id)}
-                            aria-pressed={selectedSeats.has(id)}
-                            aria-label={`Seat ${id}${status === 'problem' ? ' - Problem detected' : status === 'inspected' ? ' - Inspected' : ''}`}
-                            title={id}
-                          >
-                            {id.slice(-1)}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ))}
+            <section className="dashboard__seats-section" aria-label="Inspection checklist">
+              <div className="dashboard__checklist">
+                <div className="dashboard__checklist-head">
+                  <h2 className="dashboard__checklist-title">Preflight Checklist</h2>
                 </div>
-                <div className="dashboard__seat-grid">
-                  {Array.from({ length: 15 }, (_, i) => i + 15).map((r) => (
-                    <div key={r} className="dashboard__seat-row">
-                      <span className="dashboard__seat-row-num">{r + 1}</span>
-                      {[0, 1, 2].map((c) => {
-                        const id = getSeatId(r, c)
-                        const status = getSeatStatus(id)
-                        if (!includesSeat(r, c)) return <span key={c} className="dashboard__seat dashboard__seat--spacer" aria-hidden />
-                        return (
+
+                {!sessionId && (
+                  <>
+                    {activeLoading && activeSessions.length === 0 && (
+                      <p className="dashboard__checklist-empty">Loading…</p>
+                    )}
+                    {activeError && (
+                      <p className="dashboard__checklist-empty" style={{ color: '#fca5a5' }}>{activeError}</p>
+                    )}
+                    {!activeLoading && activeSessions.length === 0 && (
+                      <>
+                        <p className="dashboard__checklist-empty">No inspection selected.</p>
+                        <p className="dashboard__checklist-empty">Waiting for an inspection to start…</p>
+                        <p className="dashboard__checklist-recent">
+                          Or add <code>?sessionId=...</code> to the URL.
+                        </p>
+                      </>
+                    )}
+                    {activeSessions.length >= 1 && (
+                      <div className="dashboard__checklist-live">
+                        {activeSessions.length === 1 && (
                           <button
-                            key={c}
                             type="button"
-                            className={`dashboard__seat ${status === 'problem' ? 'dashboard__seat--problem' : ''} ${status === 'inspected' ? 'dashboard__seat--inspected' : ''} ${selectedSeats.has(id) ? 'dashboard__seat--selected' : ''}`}
-                            onClick={() => toggleSeat(id)}
-                            aria-pressed={selectedSeats.has(id)}
-                            aria-label={`Seat ${id}${status === 'problem' ? ' - Problem detected' : status === 'inspected' ? ' - Inspected' : ''}`}
-                            title={id}
+                            className="dashboard__join-btn dashboard__join-btn--primary"
+                            onClick={() => setSearchParams({ sessionId: activeSessions[0].id })}
                           >
-                            {id.slice(-1)}
+                            Join live inspection
                           </button>
-                        )
-                      })}
-                      <span className="dashboard__aisle" aria-hidden />
-                      {[3, 4, 5].map((c) => {
-                        const id = getSeatId(r, c)
-                        const status = getSeatStatus(id)
-                        if (!includesSeat(r, c)) return <span key={c} className="dashboard__seat dashboard__seat--spacer" aria-hidden />
-                        return (
-                          <button
-                            key={c}
-                            type="button"
-                            className={`dashboard__seat ${status === 'problem' ? 'dashboard__seat--problem' : ''} ${status === 'inspected' ? 'dashboard__seat--inspected' : ''} ${selectedSeats.has(id) ? 'dashboard__seat--selected' : ''}`}
-                            onClick={() => toggleSeat(id)}
-                            aria-pressed={selectedSeats.has(id)}
-                            aria-label={`Seat ${id}${status === 'problem' ? ' - Problem detected' : status === 'inspected' ? ' - Inspected' : ''}`}
-                            title={id}
-                          >
-                            {id.slice(-1)}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ))}
-                </div>
+                        )}
+                        <p className="dashboard__checklist-live-title">Live inspections</p>
+                        <ul className="dashboard__checklist-live-list">
+                          {activeSessions.map((s) => (
+                            <li key={s.id} className="dashboard__checklist-live-item">
+                              <span className="dashboard__checklist-live-meta">
+                                {formatStartedAt(s.started_at)} · {s.progress_pct}%
+                              </span>
+                              <button
+                                type="button"
+                                className="dashboard__join-btn"
+                                onClick={() => setSearchParams({ sessionId: s.id })}
+                              >
+                                Join live inspection
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {sessionId && loading && <p className="dashboard__checklist-empty">Loading…</p>}
+
+                {sessionId && error && <p className="dashboard__checklist-empty" style={{ color: '#fca5a5' }}>{error}</p>}
+
+                {sessionId && session && (
+                  <div className="dashboard__checklist-list">
+                    {INSPECTION_STEPS.map((step) => {
+                      const m = mergeStep(step, steps)
+                      return (
+                        <ChecklistStepRow
+                          key={step.id}
+                          stepId={m.stepId}
+                          title={m.title}
+                          status={m.status}
+                          photoPath={m.photoPath}
+                          transcript={m.transcript}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </section>
 
-            {/* Progress Summary - Right Side */}
             <aside className="dashboard__progress-panel" aria-label="Inspection progress">
               <div className="dashboard__progress-header">
                 <h2 className="dashboard__progress-panel-title">Inspection Progress</h2>
-                <span className="dashboard__progress-badge">{inspectionProgress.percentComplete}% Complete</span>
+                <span className="dashboard__progress-badge">
+                  {session ? `${session.progress_pct}%` : '0%'} Complete
+                </span>
               </div>
 
               <div className="dashboard__progress-stat-card dashboard__progress-stat-card--primary">
                 <div className="dashboard__progress-stat-icon">✓</div>
                 <div className="dashboard__progress-stat-content">
-                  <div className="dashboard__progress-stat-value">{inspectionProgress.inspectedSeats}<span className="dashboard__progress-stat-total">/{inspectionProgress.totalSeats}</span></div>
-                  <div className="dashboard__progress-stat-label">Seats Inspected</div>
-                </div>
-              </div>
-
-              <div className="dashboard__progress-stat-card dashboard__progress-stat-card--danger">
-                <div className="dashboard__progress-stat-icon">!</div>
-                <div className="dashboard__progress-stat-content">
-                  <div className="dashboard__progress-stat-value">{inspectionProgress.problemSeats}</div>
-                  <div className="dashboard__progress-stat-label">Problems Detected</div>
+                  <div className="dashboard__progress-stat-value">
+                    {session?.steps_completed ?? 0}
+                    <span className="dashboard__progress-stat-total">/{session?.total_steps ?? 12}</span>
+                  </div>
+                  <div className="dashboard__progress-stat-label">Steps Completed</div>
                 </div>
               </div>
 
               <div className="dashboard__progress-bar-container">
                 <div className="dashboard__progress-bar-label">Overall Progress</div>
-                <div className="dashboard__progress-bar" role="progressbar" aria-valuenow={inspectionProgress.percentComplete} aria-valuemin={0} aria-valuemax={100}>
-                  <div className="dashboard__progress-bar-fill" style={{ width: `${inspectionProgress.percentComplete}%` }} />
+                <div
+                  className="dashboard__progress-bar"
+                  role="progressbar"
+                  aria-valuenow={session?.progress_pct ?? 0}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <div
+                    className="dashboard__progress-bar-fill"
+                    style={{ width: `${session?.progress_pct ?? 0}%` }}
+                  />
                 </div>
-                <div className="dashboard__progress-bar-text">{inspectionProgress.percentComplete}%</div>
+                <div className="dashboard__progress-bar-text">{session?.progress_pct ?? 0}%</div>
               </div>
 
               <div className="dashboard__progress-footer">
@@ -236,7 +225,7 @@ export function Dashboard() {
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                <span>Updated {inspectionProgress.lastUpdated}</span>
+                <span>Updated {lastUpdated}</span>
               </div>
             </aside>
           </div>
