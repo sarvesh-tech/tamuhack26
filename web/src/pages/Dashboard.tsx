@@ -4,6 +4,8 @@ import type { Session } from '@supabase/supabase-js'
 import type { Flight } from '../lib/flightEngine'
 import { useFlights } from '../hooks/useFlights'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { RouteMap } from '../components/RouteMap'
+import { PlaneModelViewer } from '../components/PlaneModelViewer'
 
 type TimeFilter = '1-hour' | '12-hours' | 'all'
 type SortBy = 'departure' | 'flightNumber' | 'origin' | 'destination' | 'aircraft'
@@ -24,6 +26,11 @@ function displayName(session: Session | null): string {
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
 }
 
 function matchesSearch(flight: Flight, q: string): boolean {
@@ -210,45 +217,93 @@ export function Dashboard() {
 
       {loading && <p className="dashboard__loading">Loading flights…</p>}
 
-      {!loading && !error && (
+      {!loading && !error && selectedFlight ? (
+        <div id="flights-panel" className="dashboard__detail-view" role="region" aria-label="Flight details">
+          <div className="dashboard__canvas-placeholder" id="dashboard-three-container">
+            <PlaneModelViewer />
+          </div>
+          <div className="dashboard__detail-panel">
+            <button
+              type="button"
+              className="dashboard__detail-back"
+              onClick={() => setSelectedFlight(null)}
+              aria-label="Back to flight list"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+            <div className="dashboard__detail-content">
+              <h2 className="dashboard__detail-title">AA{selectedFlight.flightNumber}</h2>
+              <div className="dashboard__detail-route">
+                <div className="dashboard__detail-route-legs">
+                  <span className="dashboard__detail-airport">
+                    <strong>{selectedFlight.origin.code}</strong>
+                    <em>{selectedFlight.origin.city}</em>
+                  </span>
+                  <span className="dashboard__detail-arrow" aria-hidden>→</span>
+                  <span className="dashboard__detail-airport">
+                    <strong>{selectedFlight.destination.code}</strong>
+                    <em>{selectedFlight.destination.city}</em>
+                  </span>
+                </div>
+                <RouteMap origin={selectedFlight.origin} destination={selectedFlight.destination} />
+              </div>
+              <dl className="dashboard__detail-meta">
+                <div className="dashboard__detail-meta-row">
+                  <dt>Departure</dt>
+                  <dd>{formatDateTime(selectedFlight.departureTime)}</dd>
+                </div>
+                <div className="dashboard__detail-meta-row">
+                  <dt>Arrival</dt>
+                  <dd>{formatDateTime(selectedFlight.arrivalTime)}</dd>
+                </div>
+                <div className="dashboard__detail-meta-row">
+                  <dt>Duration</dt>
+                  <dd>{selectedFlight.duration.locale}</dd>
+                </div>
+                <div className="dashboard__detail-meta-row">
+                  <dt>Aircraft</dt>
+                  <dd>{selectedFlight.aircraft.model} · {selectedFlight.aircraft.speed} mph · {selectedFlight.aircraft.passengerCapacity.total} seats</dd>
+                </div>
+                <div className="dashboard__detail-meta-row">
+                  <dt>Distance</dt>
+                  <dd>{selectedFlight.distance.toLocaleString()} km</dd>
+                </div>
+              </dl>
+            </div>
+            <button type="button" className="dashboard__detail-continue">
+              Continue
+            </button>
+          </div>
+        </div>
+      ) : !loading && !error ? (
         <div id="flights-panel" className="dashboard__flights-grid" role="list">
           {filtered.map((f) => (
             <button
               key={`${f.flightNumber}-${f.origin.code}-${f.destination.code}-${f.departureTime}`}
               type="button"
               role="listitem"
-              className={`dashboard__flights-tile ${selectedFlight === f ? 'dashboard__flights-tile--selected' : ''}`}
+              className="dashboard__flights-tile"
               onClick={() => setSelectedFlight(f)}
             >
-              <span className="dashboard__flights-label">
-                AA{f.flightNumber} · {f.origin.code} → {f.destination.code} · {f.aircraft.model}
-              </span>
-              <span className="dashboard__flights-secondary">
-                {formatTime(f.departureTime)} – {formatTime(f.arrivalTime)}
-              </span>
+              <img src="/aalogo.png" alt="" className="dashboard__flights-logo" aria-hidden />
+              <div className="dashboard__flights-tile-body">
+                <span className="dashboard__flights-route">
+                  {f.origin.code} → {f.destination.code}
+                </span>
+                <span className="dashboard__flights-label">
+                  AA{f.flightNumber} · {f.aircraft.model}
+                </span>
+                <span className="dashboard__flights-secondary">
+                  {formatTime(f.departureTime)} – {formatTime(f.arrivalTime)}
+                </span>
+              </div>
             </button>
           ))}
         </div>
-      )}
-
-      {selectedFlight && (
-        <section className="dashboard__selected-card" aria-label="Selected flight">
-          <h3 className="dashboard__selected-title">Selected flight</h3>
-          <p className="dashboard__selected-label">
-            AA{selectedFlight.flightNumber} · {selectedFlight.origin.code} → {selectedFlight.destination.code} · {selectedFlight.aircraft.model}
-          </p>
-          <p className="dashboard__selected-secondary">
-            {formatTime(selectedFlight.departureTime)} – {formatTime(selectedFlight.arrivalTime)}
-          </p>
-        </section>
-      )}
-
-      <section className="dashboard__map" aria-label="Fleet map">
-        <div className="dashboard__map-placeholder">
-          <span className="dashboard__map-label">Fleet map</span>
-          <p className="dashboard__map-desc">Map visualization coming soon.</p>
-        </div>
-      </section>
+      ) : null}
     </main>
   )
 }

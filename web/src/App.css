@@ -375,6 +375,221 @@
   margin: 0 0 1rem;
 }
 
+/* ------ detail view (selected flight: canvas | panel) ------ */
+@keyframes detailCanvasIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes detailPanelIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.dashboard__detail-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  min-height: 380px;
+  align-items: stretch;
+}
+
+.dashboard__canvas-placeholder {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+  animation: detailCanvasIn 0.35s ease-out;
+}
+
+.dashboard__canvas-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dashboard__detail-panel {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  animation: detailPanelIn 0.4s ease-out;
+  min-height: 0;
+}
+
+.dashboard__detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #a1a1aa;
+  background: none;
+  border: none;
+  padding: 0.35rem 0;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.dashboard__detail-back:hover {
+  color: #fafafa;
+}
+
+.dashboard__detail-back svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.dashboard__detail-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.dashboard__detail-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #fafafa;
+  margin: 0 0 0;
+}
+
+.dashboard__detail-route {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dashboard__detail-route-legs {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard__route-map {
+  width: 360px;
+  height: 220px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.dashboard__route-map-inner {
+  border-radius: 8px;
+}
+
+.dashboard__detail-airport {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.dashboard__detail-airport strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fafafa;
+}
+
+.dashboard__detail-airport em {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-style: normal;
+  color: #a1a1aa;
+}
+
+.dashboard__detail-arrow {
+  font-size: 1rem;
+  color: #71717a;
+  flex-shrink: 0;
+}
+
+.dashboard__detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.dashboard__detail-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.dashboard__detail-meta-row dt {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  color: #71717a;
+  font-weight: 400;
+  margin: 0;
+}
+
+.dashboard__detail-meta-row dd {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #e4e4e7;
+  margin: 0;
+  text-align: right;
+}
+
+.dashboard__detail-continue {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0a0a0a;
+  background: #fafafa;
+  border: none;
+  border-radius: 10px;
+  padding: 0.85rem 1.25rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.dashboard__detail-continue:hover {
+  background: #e4e4e7;
+  transform: translateY(-1px);
+}
+
+/* ------ flights grid ------ */
+@keyframes gridFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .dashboard__flights-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -382,13 +597,14 @@
   margin-bottom: 1.5rem;
   max-height: 400px;
   overflow-y: auto;
+  animation: gridFadeIn 0.3s ease-out;
 }
 
 .dashboard__flights-tile {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
   padding: 0.9rem 1rem;
   font-family: inherit;
   text-align: left;
@@ -399,6 +615,29 @@
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   min-height: 0;
+}
+
+.dashboard__flights-logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.dashboard__flights-tile-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.dashboard__flights-route {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #fafafa;
+  letter-spacing: 0.02em;
 }
 
 .dashboard__flights-tile:hover {
@@ -413,9 +652,9 @@
 
 .dashboard__flights-label {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  color: #fafafa;
+  color: #d4d4d8;
 }
 
 .dashboard__flights-secondary {
@@ -452,37 +691,6 @@
   font-family: 'Inter', sans-serif;
   font-size: 0.85rem;
   color: #a1a1aa;
-  margin: 0;
-}
-
-.dashboard__map {
-  min-height: 360px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px dashed rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dashboard__map-placeholder {
-  text-align: center;
-  padding: 2rem;
-}
-
-.dashboard__map-label {
-  display: block;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #a1a1aa;
-  margin-bottom: 0.5rem;
-}
-
-.dashboard__map-desc {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.85rem;
-  color: #71717a;
   margin: 0;
 }
 
