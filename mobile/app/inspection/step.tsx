@@ -117,12 +117,19 @@ export default function StepCaptureScreen() {
     }
     setCompleting(true)
     try {
-      const res = await fetch(photoUri, { method: 'GET' })
-      const blob = await res.blob()
       const path = `sessions/${sessionId}/steps/${stepId}/${Date.now()}.jpg`
+
+      const formData = new FormData()
+      formData.append('file', {
+        uri: photoUri,
+        name: path.split('/').pop(),
+        type: 'image/jpeg',
+      } as any)
+
       const { error: upErr } = await supabase.storage
         .from('inspection-evidence')
-        .upload(path, blob, { contentType: 'image/jpeg' })
+        .upload(path, formData)
+
       if (upErr) throw upErr
 
       const { error: rpcErr } = await supabase.rpc('rpc_complete_step', {
