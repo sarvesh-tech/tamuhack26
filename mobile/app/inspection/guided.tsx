@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useInspectionSession } from '@/hooks/useInspectionSession'
 import { INSPECTION_STEPS } from '@/constants/inspectionSteps'
@@ -8,6 +9,7 @@ import { SpaceGrotesk_600SemiBold } from '@expo-google-fonts/space-grotesk'
 export default function GuidedInspectionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { session, steps, loading, error } = useInspectionSession(sessionId ?? null)
 
   const total = session?.total_steps ?? 12
@@ -45,7 +47,7 @@ export default function GuidedInspectionScreen() {
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.container, { paddingTop: (insets.top || 24) + 12 }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Preflight Checklist</Text>
         <Text style={styles.progressLabel}>

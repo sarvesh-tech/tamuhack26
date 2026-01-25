@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Stack } from 'expo-router'
 import * as Linking from 'expo-linking'
 import 'react-native-reanimated'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
 
 
@@ -25,21 +26,20 @@ export default function RootLayout() {
     return () => sub.remove()
   }, [])
 
-  useEffect(() => {
-  }, [])
-
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: '#141414' },
-        animation: 'fade',
-      }}
-    >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="auth" options={{ animation: 'fade' }} />
-      <Stack.Screen name="inspection" />
-      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-    </Stack>
+    <SafeAreaProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#141414' },
+          animation: 'fade',
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="auth" options={{ animation: 'fade' }} />
+        <Stack.Screen name="inspection" />
+        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+      </Stack>
+    </SafeAreaProvider>
   )
 }

@@ -8,6 +8,7 @@ import {
   Alert,
   Image,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { Audio } from 'expo-av'
@@ -21,6 +22,7 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 export default function StepCaptureScreen() {
   const { sessionId, stepId } = useLocalSearchParams<{ sessionId: string; stepId: string }>()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const stepNum = stepId ? parseInt(stepId, 10) : 0
   const step = INSPECTION_STEPS.find((s) => s.id === stepNum)
 
@@ -161,7 +163,7 @@ export default function StepCaptureScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: (insets.top || 24) + 12 }]}>
       <View style={styles.header}>
         <Text style={styles.stepLabel}>Step {step.id}</Text>
         <Text style={styles.title}>{step.title}</Text>
