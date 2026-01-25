@@ -1334,17 +1334,16 @@
 }
 
 .dashboard__checklist-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
 }
 
 .dashboard__checklist-item {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  gap: 0.5rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
@@ -1364,9 +1363,14 @@
 }
 
 .dashboard__checklist-item-title {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #e4e4e7;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.2rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
 }
 
 .dashboard__checklist-item-status {
@@ -2011,14 +2015,17 @@
 
 .dashboard__checklist-item-header {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
   width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .dashboard__checklist-item--expanded {
   background: rgba(255,255,255,0.03);
+  grid-column: 1 / -1;
 }
 
 .dashboard__checklist-arrow {
@@ -2030,6 +2037,8 @@
 .dashboard__checklist-item-body-text {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 .dashboard__checklist-item-content {
@@ -2043,12 +2052,17 @@
   margin-bottom: 0.5rem;
 }
 
+.dashboard__checklist-list .dashboard__checklist-item {
+  margin-bottom: 0;
+}
+
 .dashboard__checklist-item {
   /* Match Find Flight Tiles */
+  display: flex;
+  flex-direction: column;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  margin-bottom: 0.75rem;
   transition: background 0.15s, border-color 0.15s;
 }
 

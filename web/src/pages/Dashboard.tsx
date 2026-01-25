@@ -174,17 +174,66 @@ function ChecklistAccordionRow({
       let ai_severity = 'none'
       let ai_analysis = null
 
+      console.log('[Dashboard] ===== AI ANALYSIS START =====')
+      console.log('[Dashboard] Step title:', step.title)
+      console.log('[Dashboard] Transcript:', transcript)
+      
       try {
-        const { data: aiRes, error: aiErr } = await supabase.functions.invoke('analyze-step', {
-          body: { title: step.title, transcript: transcript || '' }
-        })
-        if (!aiErr && aiRes) {
-          ai_severity = aiRes.severity || 'none'
-          ai_analysis = aiRes.analysis || null
+        console.log('[Dashboard] Calling OpenAI directly...')
+        
+        const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY
+        
+        if (!OPENAI_API_KEY) {
+          console.warn('[Dashboard] OPENAI_API_KEY not configured, skipping AI analysis')
+        } else {
+          const prompt = `You are an airline safety inspector. Analyze the following preflight inspection task and the inspector's notes.
+Deduce the severity level of any issues found. BE VERY SENSITIVE to any language suggesting problems, even if mixed with positive statements.
+
+TASK: "${step.title}"
+NOTES: "${transcript || "No notes provided"}"
+
+Respond in strict JSON format with two fields:
+- "severity": one of ["low", "medium", "high", "none"]
+  - "high": ANY mention of death, danger, missing equipment, broken items, failure, critical problems, sarcasm about safety, or anything that suggests the flight should not depart. Examples: "people are going to die", "extinguisher missing", "door won't seal", "hydraulic leak".
+  - "medium": Concerns, hesitations, incomplete checks, unprofessional notes, or anything suspicious. Examples: "not sure", "might be an issue", "hello" as a note (inappropriate), "I guess it's fine".
+  - "low": Minor observations, trivial notes, or routine findings with no safety concern.
+  - "none": ONLY use if the notes explicitly confirm everything is correct with positive language like "checked", "verified", "good", "all clear", "operational", "armed correctly".
+- "analysis": A brief, one-sentence professional summary. If there's a problem, describe it clearly.
+
+IMPORTANT: If ANY part of the notes suggests a problem or concern, classify it as at least "medium". Do NOT default to "none" or "low" when there are red flags.`
+
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0,
+              response_format: { type: 'json_object' }
+            })
+          })
+          
+          if (!response.ok) {
+            throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
+          }
+          
+          const data = await response.json()
+          console.log('[Dashboard] OpenAI response:', data)
+          
+          const result = JSON.parse(data.choices[0].message.content)
+          ai_severity = result.severity || 'none'
+          ai_analysis = result.analysis || null
+          console.log('[Dashboard] Parsed AI result:', { severity: ai_severity, analysis: ai_analysis })
         }
       } catch (e) {
-        console.warn('AI analysis failed:', e)
+        console.error('[Dashboard] AI analysis exception:', e)
       }
+      
+      console.log('[Dashboard] Final AI values being saved:', { ai_severity, ai_analysis })
+      console.log('[Dashboard] ===== AI ANALYSIS END =====')
 
       const { error } = await supabase
         .from('inspection_step_instances')
