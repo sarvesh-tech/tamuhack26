@@ -185,7 +185,12 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
                 if (!user) throw new Error('Not signed in')
                 const { data: sessionRow, error: sessionErr } = await supabase
                   .from('inspection_sessions')
-                  .insert({ inspector_id: user.id })
+                  .insert({
+                    inspector_id: user.id,
+                    inspector_email: user.email ?? null,
+                    inspector_name: (user.user_metadata?.full_name ?? user.user_metadata?.name) ?? null,
+                    flight_number: userFlightNumber ?? null,
+                  })
                   .select('id')
                   .single()
                 if (sessionErr || !sessionRow) throw sessionErr || new Error('Failed to create session')

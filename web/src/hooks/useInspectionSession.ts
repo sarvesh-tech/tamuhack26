@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase'
 export type InspectionSession = {
   id: string
   inspector_id: string
+  inspector_email: string | null
+  inspector_name: string | null
+  flight_number: string | null
   status: 'active' | 'completed'
   started_at: string
   ended_at: string | null

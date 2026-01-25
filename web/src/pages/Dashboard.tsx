@@ -5,6 +5,7 @@ import { INSPECTION_STEPS } from '../constants/inspectionSteps'
 import { useInspectionSession, type InspectionStepInstance } from '../hooks/useInspectionSession'
 import { useInspectionPhotoUrl } from '../hooks/useInspectionPhotoUrl'
 import { useActiveInspectionSessions } from '../hooks/useActiveInspectionSessions'
+import { useFlightForInspection } from '../hooks/useFlightForInspection'
 
 type TabId = 'overview' | 'audit-logs' | 'inspections'
 
@@ -69,19 +70,65 @@ function formatStartedAt(iso: string): string {
   return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
 }
 
+function formatAuditTime(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffM = diffMs / 60000
+  const diffH = diffMs / 3600000
+  if (diffM < 1) return 'Just now'
+  if (diffM < 60) return `${Math.floor(diffM)}m ago`
+  if (diffH < 24) return `${Math.floor(diffH)}h ago`
+  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function AuditLogRow({
+  photoPath,
+  user,
+  description,
+  timestamp,
+}: {
+  photoPath: string | null
+  user: string
+  description: string
+  timestamp: string
+}) {
+  const { url } = useInspectionPhotoUrl(photoPath)
+  const userTrunc = user.length > 24 ? user.slice(0, 24) + '…' : user
+  return (
+    <div className="dashboard__audit-row">
+      <div className="dashboard__audit-thumb-wrap">
+        {url ? (
+          <img src={url} alt="" className="dashboard__audit-thumb" />
+        ) : (
+          <span className="dashboard__audit-thumb dashboard__audit-thumb--placeholder" aria-hidden />
+        )}
+      </div>
+      <span className="dashboard__audit-user" title={user}>{userTrunc}</span>
+      <span className="dashboard__audit-desc" title={description}>{description}</span>
+      <span className="dashboard__audit-time">{timestamp}</span>
+    </div>
+  )
+}
+
 export function Dashboard() {
   const { state } = useLocation() as { state?: { flight: Flight } | null }
   const [searchParams, setSearchParams] = useSearchParams()
   const sessionId = searchParams.get('sessionId')
-  const flight = state?.flight ?? null
   const [activeTab, setActiveTab] = useState<TabId>('overview')
 
   const { session, steps, loading, error } = useInspectionSession(sessionId)
+  const { flight, loading: flightLoading } = useFlightForInspection(session, state?.flight ?? null)
   const { sessions: activeSessions, loading: activeLoading, error: activeError } = useActiveInspectionSessions(!sessionId)
 
   const lastUpdated = session?.updated_at
     ? new Date(session.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '—'
+
+  const completedSteps = (steps ?? [])
+    .filter((s) => s.status === 'completed' && s.completed_at)
+    .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''))
 
   return (
     <div className="dashboard">
@@ -102,6 +149,26 @@ export function Dashboard() {
         </nav>
       </aside>
       <main className="dashboard__main">
+        <div className="dashboard__flight-info">
+          <img src="/aalogo.png" alt="" className="dashboard__flight-logo" aria-hidden />
+          <div className="dashboard__flight-info-body">
+            <h1 className="dashboard__flight-number">
+              {flight ? `AA${flight.flightNumber}` : '—'}
+            </h1>
+            <p className="dashboard__flight-route">
+              {flightLoading && !flight
+                ? 'Loading…'
+                : flight
+                  ? `${flight.origin.city} (${flight.origin.code}) → ${flight.destination.city} (${flight.destination.code})`
+                  : 'From — to —'}
+            </p>
+            {!flight && !flightLoading && (
+              <p className="dashboard__flight-hint">
+                <Link to="/find-flight">Select a flight</Link> and click Continue to view the dashboard.
+              </p>
+            )}
+          </div>
+        </div>
         {activeTab === 'overview' ? (
           <div className="dashboard__overview-wrap">
             <section className="dashboard__seats-section" aria-label="Inspection checklist">
@@ -231,25 +298,37 @@ export function Dashboard() {
           </div>
         ) : (
           <>
-            <div className="dashboard__flight-info">
-              <h1 className="dashboard__flight-number">
-                {flight ? `AA${flight.flightNumber}` : '—'}
-              </h1>
-              <p className="dashboard__flight-route">
-                {flight
-                  ? `${flight.origin.city} (${flight.origin.code}) → ${flight.destination.city} (${flight.destination.code})`
-                  : 'From — to —'}
-              </p>
-              {!flight && (
-                <p className="dashboard__flight-hint">
-                  <Link to="/find-flight">Select a flight</Link> and click Continue to view the dashboard.
-                </p>
-              )}
-            </div>
             {activeTab === 'audit-logs' && (
               <section className="dashboard__panel" aria-label="Audit logs">
                 <h2 className="dashboard__panel-title">Audit logs</h2>
-                <p className="dashboard__panel-empty">Audit log entries will appear here.</p>
+                {!sessionId && (
+                  <p className="dashboard__panel-empty">Select an inspection to view audit logs.</p>
+                )}
+                {sessionId && loading && <p className="dashboard__panel-empty">Loading…</p>}
+                {sessionId && error && <p className="dashboard__panel-empty" style={{ color: '#fca5a5' }}>{error}</p>}
+                {sessionId && session && completedSteps.length === 0 && (
+                  <p className="dashboard__panel-empty">
+                    No completed steps yet. Complete steps on the mobile app to see entries.
+                  </p>
+                )}
+                {sessionId && session && completedSteps.length >= 1 && (
+                  <div className="dashboard__audit-list">
+                    {completedSteps.map((step) => {
+                      const desc = step.transcript
+                        ? `${step.title} — ${step.transcript.slice(0, 50)}${step.transcript.length > 50 ? '…' : ''}`
+                        : step.title
+                      return (
+                        <AuditLogRow
+                          key={step.id}
+                          photoPath={step.photo_path}
+                          user={session.inspector_name || session.inspector_email || 'Inspector'}
+                          description={desc}
+                          timestamp={formatAuditTime(step.completed_at)}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
               </section>
             )}
             {activeTab === 'inspections' && (
