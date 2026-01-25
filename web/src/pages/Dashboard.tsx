@@ -125,24 +125,43 @@ function ChecklistAccordionRow({
         }
       }
 
+      let ai_severity = 'none'
+      let ai_analysis = null
+
+      try {
+        const { data: aiRes, error: aiErr } = await supabase.functions.invoke('analyze-step', {
+          body: { title: step.title, transcript: transcript || '' }
+        })
+        if (!aiErr && aiRes) {
+          ai_severity = aiRes.severity || 'none'
+          ai_analysis = aiRes.analysis || null
+        }
+      } catch (e) {
+        console.warn('AI analysis failed:', e)
+      }
+
       const { error } = await supabase
         .from('inspection_step_instances')
         .upsert({
+          id: dbStep?.id, // Use existing ID to guarantee update over insertion
           session_id: sessionId,
           step_id: step.id,
           title: step.title,
           status: newStatus,
           completed_at: new Date().toISOString(),
           photo_path: photoPath,
-          transcript: transcript || null
-        }, { onConflict: 'session_id, step_id' })
+          transcript: transcript || null,
+          ai_severity,
+          ai_analysis
+        }, { onConflict: 'id' })
 
       if (error) throw error
+      console.log(`[Dashboard] Step ${step.id} updated successfully to ${newStatus}`);
       onUpdate()
       onToggle()
     } catch (e: any) {
+      console.error('[Dashboard] Step Update Failure:', e);
       alert(`Failed to update step: ${e.message || 'Unknown error'}`)
-      console.error('Update Step Error:', e)
     } finally {
       setLoading(false)
     }
@@ -186,7 +205,7 @@ function ChecklistAccordionRow({
              ) : (
                 <div className="dashboard__checklist-form">
                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                        <label className="dashboard__join-btn" style={{ flex: 1, cursor: 'pointer', textAlign: 'center', backgroundColor: photoFile ? '#22c55e' : 'rgba(255,255,255,0.08)', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0, fontSize: '0.85rem' }}>
+                        <label className="dashboard__join-btn" style={{ flex: 1, cursor: 'pointer', textAlign: 'center', backgroundColor: photoFile ? '#22c55e' : 'rgba(255,255,255,0.08)' }}>
                             <input 
                               type="file" 
                               accept="image/*" 
@@ -194,16 +213,16 @@ function ChecklistAccordionRow({
                               onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
                               style={{ display: 'none' }}
                             />
-                            {photoFile ? 'Photo Selected' : '📷 Photo'}
+                            {photoFile ? 'Photo Selected' : '📷 Take Photo'}
                         </label>
                         
                         <button 
                              type="button"
                              className="dashboard__join-btn"
                              onClick={handleSpeech}
-                             style={{ flex: 1, backgroundColor: listening ? '#ef4444' : 'rgba(255,255,255,0.08)', animation: listening ? 'pulse 1s infinite' : 'none', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, padding: 0, fontSize: '0.85rem' }}
+                             style={{ flex: 1, backgroundColor: listening ? '#ef4444' : 'rgba(255,255,255,0.08)', animation: listening ? 'pulse 1s infinite' : 'none' }}
                         >
-                             {listening ? 'Listening...' : '🎤 Note'}
+                             {listening ? 'Listening...' : '🎤 Dictate Notes'}
                         </button>
                     </div>
 
@@ -223,7 +242,7 @@ function ChecklistAccordionRow({
                           className="dashboard__join-btn"
                           disabled={loading}
                           onClick={() => handleUpdate('skipped')}
-                          style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', color: '#fbbf24', height: '42px', padding: 0, margin: 0, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'none' }}
+                          style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', color: '#fbbf24', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
                           Skip
                         </button>
@@ -231,9 +250,9 @@ function ChecklistAccordionRow({
                           className="dashboard__join-btn dashboard__join-btn--primary"
                           disabled={loading}
                           onClick={() => handleUpdate('completed')}
-                          style={{ flex: 1, height: '42px', margin: 0, padding: 0, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'none' }}
+                          style={{ flex: 2, height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
-                          {loading ? 'Saving...' : 'Complete'}
+                          {loading ? 'Saving...' : 'Complete Step'}
                         </button>
                     </div>
                 </div>
@@ -277,14 +296,27 @@ function AuditLogRow({
     user,
     description,
     timestamp,
+    severity,
+    analysis
 }: {
     photoPath: string | null;
     user: string;
     description: string;
     timestamp: string;
+    severity?: string | null;
+    analysis?: string | null;
 }) {
     const { url } = useInspectionPhotoUrl(photoPath);
     const userTrunc = user.length > 24 ? user.slice(0, 24) + "…" : user;
+    
+    const badgeClass = severity === 'high' ? 'badge--high' : 
+                      severity === 'medium' ? 'badge--medium' : 
+                      (severity === 'low' || severity === 'none') ? 'badge--low' : '';
+    
+    const badgeLabel = severity === 'high' ? 'HIGH PRIORITY' : 
+                      severity === 'medium' ? 'WARNING' : 
+                      (severity === 'low' || severity === 'none') ? 'FUNCTIONAL' : '';
+
     return (
         <div className="dashboard__audit-row">
             <div className="dashboard__audit-thumb-wrap">
@@ -297,12 +329,14 @@ function AuditLogRow({
                     />
                 )}
             </div>
-            <span className="dashboard__audit-user" title={user}>
-                {userTrunc}
-            </span>
-            <span className="dashboard__audit-desc" title={description}>
-                {description}
-            </span>
+            <div className="dashboard__audit-body">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                    <span className="dashboard__audit-user" title={user}>{userTrunc}</span>
+                    {badgeLabel && <span className={`badge ${badgeClass}`}>{badgeLabel}</span>}
+                </div>
+                <span className="dashboard__audit-desc" title={description}>{description}</span>
+                {analysis && <p style={{ fontSize: '0.75rem', color: '#71717a', fontStyle: 'italic', marginTop: '0.25rem' }}>AI: {analysis}</p>}
+            </div>
             <span className="dashboard__audit-time">{timestamp}</span>
         </div>
     );
@@ -317,11 +351,10 @@ export function Dashboard() {
     const [userRole, setUserRole] = useState<Role | null>(null);
 
     useEffect(() => {
-        // Fetch user role from profiles table
+        // Fetch user role
         supabase.auth.getUser().then(async ({ data: { user } }) => {
             if (!user) return
-            const { data, error } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-            if (error) console.error('Profile fetch error:', error)
+            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
             if (data?.role) setUserRole(data.role as Role)
         })
     }, [])
@@ -334,7 +367,7 @@ export function Dashboard() {
         }
     }
 
-    const { session, steps, loading, error, endSession, cancelSession } =
+    const { session, steps, loading, error, endSession, cancelSession, refresh, progressPct } =
         useInspectionSession(sessionId);
     const { flight, loading: flightLoading } = useFlightForInspection(
         session,
@@ -348,6 +381,8 @@ export function Dashboard() {
         !sessionId,
         flight ? `AA${flight.flightNumber}` : null,
     );
+
+    const displayProgressPct = progressPct;
 
     const lastUpdated = session?.updated_at
         ? new Date(session.updated_at).toLocaleTimeString([], {
@@ -396,6 +431,20 @@ export function Dashboard() {
             console.error(error);
             alert("Failed to start session");
             return;
+        }
+
+        // Initialize all steps as pending in the DB for accurate progress tracking
+        const { error: stepsErr } = await supabase
+            .from('inspection_step_instances')
+            .insert(INSPECTION_STEPS.map((s) => ({ 
+                session_id: data.id, 
+                step_id: s.id, 
+                title: s.title, 
+                status: 'pending' 
+            })));
+
+        if (stepsErr) {
+            console.error("Failed to initialize steps:", stepsErr);
         }
 
         setSearchParams({ sessionId: data.id });
@@ -482,6 +531,64 @@ export function Dashboard() {
                         )}
                     </div>
                 </div>
+
+                {activeTab === "overview" && sessionId && (
+                    <section className="status-dashboard" style={{ padding: '0 2rem' }}>
+                        <div className={`status-banner ${
+                            displayProgressPct === 100 ? 'status-banner--operational' : 
+                            displayProgressPct > 0 ? 'status-banner--info' : 'status-banner--info'
+                        }`}>
+                            <span>
+                                { displayProgressPct === 100 ? 'All Systems Operational' : 
+                                  displayProgressPct > 80 ? 'Ready for Pushback' :
+                                  displayProgressPct > 50 ? 'Final Safety Checks in Progress' :
+                                  displayProgressPct > 20 ? 'Boarding in Progress' : 'Initial Cabin Preparation'}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div className="nav__active-dot" style={{ backgroundColor: displayProgressPct === 100 ? '#4ade80' : '#60a5fa' }} />
+                                <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>Live Inspection Status</span>
+                            </div>
+                        </div>
+
+                        {[
+                            { name: 'Emergency & Safety Systems', range: [1, 4] },
+                            { name: 'Cabin Readiness & Configuration', range: [5, 7] },
+                            { name: 'Structural Integrity & Galleys', range: [8, 10] },
+                            { name: 'Flight Deck Communication', range: [11, 15] }
+                        ].map((cat) => {
+                            const catSteps = steps.filter(s => s.step_id >= cat.range[0] && s.step_id <= cat.range[1]);
+                            const completedCount = catSteps.filter(s => s.status === 'completed' || s.status === 'skipped').length;
+                            const totalCount = cat.range[1] - cat.range[0] + 1;
+                            const isOperational = completedCount === totalCount;
+                            
+                            return (
+                                <div key={cat.name} className="system-row">
+                                    <div className="system-row__header">
+                                        <span className="system-row__name">{cat.name}</span>
+                                        <span className={`system-row__status ${isOperational ? 'system-row__status--operational' : 'system-row__status--pending'}`}>
+                                            {isOperational ? 'Operational' : `${completedCount}/${totalCount} Verified`}
+                                        </span>
+                                    </div>
+                                    <div className="uptime-bar">
+                                        {Array.from({ length: totalCount }).map((_, i) => {
+                                            const stepId = cat.range[0] + i;
+                                            const step = steps.find(s => s.step_id === stepId);
+                                            const statusClass = step?.status === 'completed' ? 'uptime-bar__segment--complete' : 
+                                                              step?.status === 'skipped' ? 'uptime-bar__segment--skipped' : 
+                                                              'uptime-bar__segment--pending';
+                                            return <div key={i} className={`uptime-bar__segment ${statusClass}`} title={step?.title || `Step ${stepId}`} />;
+                                        })}
+                                    </div>
+                                    <div className="uptime-legend">
+                                        <span>Inspection Start</span>
+                                        <span>100% Prepared</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </section>
+                )}
+
                 {activeTab === "overview" ? (
                     <div className="dashboard__overview-wrap">
                         <section
@@ -645,7 +752,10 @@ export function Dashboard() {
                                                     sessionId={sessionId}
                                                     expanded={editingStep?.step_id === step.id} // Reusing editingStep state to track expansion
                                                     onToggle={() => setEditingStep(editingStep?.step_id === step.id ? null : { step_id: step.id } as any)}
-                                                    onUpdate={() => {}} // Auto-updates via hook
+                                                    onUpdate={() => { 
+                                                        console.log("[Dashboard] onUpdate called, refreshing...");
+                                                        refresh(); 
+                                                    }} // Auto-updates via hook, but refresh for immediate UI sync
                                                 />
                                             );
                                         })}
@@ -670,23 +780,19 @@ export function Dashboard() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px' }}>
                                     <div style={{ 
                                         width: 10, height: 10, borderRadius: '50%', 
-                                        backgroundColor: session?.progress_pct === 100 ? '#22c55e' : 
-                                                         (session?.progress_pct ?? 0) > 60 ? '#f59e0b' : '#ef4444',
-                                        boxShadow: session?.progress_pct === 100 ? '0 0 8px #22c55e' : 'none'
+                                        backgroundColor: displayProgressPct === 100 ? '#22c55e' : 
+                                                         displayProgressPct > 60 ? '#f59e0b' : '#ef4444',
+                                        boxShadow: displayProgressPct === 100 ? '0 0 8px #22c55e' : 'none'
                                     }} />
                                     <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fafafa' }}>
-                                        {session?.progress_pct === 100 ? "Ready to Fly" : 
-                                         (session?.progress_pct ?? 0) > 80 ? "Ready for Pushback" :
-                                         (session?.progress_pct ?? 0) > 50 ? "Final Checks" :
-                                         (session?.progress_pct ?? 0) > 20 ? "Boarding" : "Cabin Prep"}
+                                        {displayProgressPct === 100 ? "Ready to Fly" : 
+                                         displayProgressPct > 80 ? "Ready for Pushback" :
+                                         displayProgressPct > 50 ? "Final Checks" :
+                                         displayProgressPct > 20 ? "Boarding" : "Cabin Prep"}
                                     </span>
                                 </div>
-
                                 <span className="dashboard__progress-badge">
-                                    {session
-                                        ? `${session.progress_pct}%`
-                                        : "0%"}{" "}
-                                    Complete
+                                    {displayProgressPct}% Complete
                                 </span>
                             </div>
 
@@ -824,6 +930,8 @@ export function Dashboard() {
                                                         timestamp={formatAuditTime(
                                                             step.completed_at,
                                                         )}
+                                                        severity={step.ai_severity}
+                                                        analysis={step.ai_analysis}
                                                     />
                                                 );
                                             })}

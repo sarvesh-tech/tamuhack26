@@ -134,12 +134,29 @@ export default function StepCaptureScreen() {
 
       if (upErr) throw upErr
 
+      let ai_severity = 'none'
+      let ai_analysis = null
+
+      try {
+        const { data: aiRes, error: aiErr } = await supabase.functions.invoke('analyze-step', {
+          body: { title: step?.title, transcript: transcript ?? '' }
+        })
+        if (!aiErr && aiRes) {
+          ai_severity = aiRes.severity || 'none'
+          ai_analysis = aiRes.analysis || null
+        }
+      } catch (e) {
+        console.warn('AI analysis failed:', e)
+      }
+
       const { error: rpcErr } = await supabase.rpc('rpc_complete_step', {
         p_session_id: sessionId,
         p_step_id: stepNum,
         p_photo_path: path,
         p_transcript: transcript ?? '',
         p_completed_at: new Date().toISOString(),
+        p_ai_severity: ai_severity,
+        p_ai_analysis: ai_analysis,
       })
       if (rpcErr) throw rpcErr
 

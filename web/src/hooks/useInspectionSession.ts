@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 export type InspectionSession = {
@@ -36,6 +36,44 @@ export function useInspectionSession(sessionId: string | null) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const fetchData = useCallback(async (isInitial: boolean) => {
+    if (!sessionId) return
+    if (isInitial) setLoading(true)
+    setError(null)
+
+    const [sRes, stRes] = await Promise.all([
+      supabase
+        .from('inspection_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single(),
+      supabase
+        .from('inspection_step_instances')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('step_id', { ascending: true }),
+    ])
+
+    if (sRes.error) {
+      console.error("[useInspectionSession] Session Load Error:", sRes.error);
+      setError(sRes.error.message)
+      setSession(null)
+    } else {
+      setSession(sRes.data as InspectionSession)
+    }
+
+    if (stRes.error) {
+      console.error("[useInspectionSession] Steps Load Error:", stRes.error);
+      if (!sRes.error) setError(stRes.error.message)
+      setSteps([])
+    } else {
+      console.log(`[useInspectionSession] Fetched ${stRes.data?.length ?? 0} steps for session ${sessionId}`);
+      setSteps((stRes.data ?? []) as InspectionStepInstance[])
+    }
+
+    if (isInitial) setLoading(false)
+  }, [sessionId])
+
   useEffect(() => {
     if (!sessionId) {
       setSession(null)
@@ -43,44 +81,6 @@ export function useInspectionSession(sessionId: string | null) {
       setLoading(false)
       setError(null)
       return
-    }
-
-    let cancelled = false
-
-    const fetchData = async (isInitial: boolean) => {
-      if (isInitial) setLoading(true)
-      setError(null)
-
-      const [sRes, stRes] = await Promise.all([
-        supabase
-          .from('inspection_sessions')
-          .select('*')
-          .eq('id', sessionId)
-          .single(),
-        supabase
-          .from('inspection_step_instances')
-          .select('*')
-          .eq('session_id', sessionId)
-          .order('step_id', { ascending: true }),
-      ])
-
-      if (cancelled) return
-
-      if (sRes.error) {
-        setError(sRes.error.message)
-        setSession(null)
-      } else {
-        setSession(sRes.data as InspectionSession)
-      }
-
-      if (stRes.error) {
-        if (!sRes.error) setError(stRes.error.message)
-        setSteps([])
-      } else {
-        setSteps((stRes.data ?? []) as InspectionStepInstance[])
-      }
-
-      if (isInitial) setLoading(false)
     }
 
     fetchData(true)
@@ -95,7 +95,8 @@ export function useInspectionSession(sessionId: string | null) {
           table: 'inspection_sessions',
           filter: `id=eq.${sessionId}`,
         },
-        () => {
+        (payload) => {
+          console.log("[useInspectionSession] Realtime Session Update:", payload);
           fetchData(false)
         }
       )
@@ -107,17 +108,17 @@ export function useInspectionSession(sessionId: string | null) {
           table: 'inspection_step_instances',
           filter: `session_id=eq.${sessionId}`,
         },
-        () => {
+        (payload) => {
+          console.log("[useInspectionSession] Realtime Step Update:", payload);
           fetchData(false)
         }
       )
       .subscribe()
 
     return () => {
-      cancelled = true
       supabase.removeChannel(channel)
     }
-  }, [sessionId])
+  }, [sessionId, fetchData])
 
 
   const endSession = async () => {
@@ -137,17 +138,31 @@ export function useInspectionSession(sessionId: string | null) {
     const { error } = await supabase
       .from('inspection_sessions')
       .update({
-        status: 'completed', // or 'cancelled' if we have that status, but type says only active | completed.
-        // If we want to support 'cancelled', we might need to update the type definition on line 10.
-        // For now let's assume 'completed' is the terminal state, maybe adds a note?
-        // User request says "cancels should have confirmations".
-        // Let's stick to 'completed' for now, but maybe we should add 'cancelled' to the type if the DB supports it.
-        // Assuming DB check constraint might exist. Let's just use 'completed' for now and maybe updated_at.
+        status: 'completed', 
         ended_at: new Date().toISOString(),
       })
       .eq('id', sessionId)
     if (error) throw error
   }
 
-  return { session, steps, loading, error, endSession, cancelSession }
+  const refresh = () => fetchData(false)
+
+  // Use a Map to get only the unique latest instance of each step_id
+  const uniqueSteps = Array.from(
+    steps.reduce((acc, current) => {
+      const existing = acc.get(current.step_id);
+      if (!existing || (current.completed_at && (!existing.completed_at || current.completed_at > existing.completed_at))) {
+        acc.set(current.step_id, current);
+      }
+      return acc;
+    }, new Map<number, InspectionStepInstance>()).values()
+  );
+
+  const stepsCompletedCount = uniqueSteps.filter(s => s.status === 'completed' || s.status === 'skipped').length
+  const progressPct = uniqueSteps.length > 0 
+    ? Math.round((stepsCompletedCount / (session?.total_steps || 15)) * 100) 
+    : 0
+
+  return { session, steps: uniqueSteps, loading, error, endSession, cancelSession, refresh, stepsCompleted: stepsCompletedCount, progressPct }
 }
+
