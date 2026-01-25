@@ -1,3 +1,6 @@
+# npm
+.npm-tmp-cache
+
 # Logs
 logs
 *.log
