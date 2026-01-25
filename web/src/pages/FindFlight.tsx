@@ -4,6 +4,8 @@ import type { Session } from '@supabase/supabase-js'
 import type { Flight } from '../lib/flightEngine'
 import { supabase } from '../lib/supabase'
 import { useFlights } from '../hooks/useFlights'
+
+import { useActiveInspectionSessions } from '../hooks/useActiveInspectionSessions'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { RouteMap } from '../components/RouteMap'
 import { PlaneModelViewer } from '../components/PlaneModelViewer'
@@ -87,8 +89,21 @@ export function FindFlight() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('1-hour')
   const [sortBy, setSortBy] = useState<SortBy>('departure')
   const [sortOpen, setSortOpen] = useState(false)
+  const [activeSessionsView, setActiveSessionsView] = useState(false)
   const [tick, setTick] = useState(0)
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null)
+  
+  const { sessions: activeSessions } = useActiveInspectionSessions(
+    !!selectedFlight,
+    selectedFlight ? `AA${selectedFlight.flightNumber}` : null
+  )
+
+  const { sessions: globalSessions, loading: globalLoading } = useActiveInspectionSessions(
+    activeSessionsView,
+    null,
+    true
+  )
+
   const sortRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
@@ -141,6 +156,73 @@ export function FindFlight() {
         </p>
       </section>
 
+      <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem' }}>
+        <button
+           type="button"
+           className={`find-flight__filter-tab ${activeSessionsView ? 'find-flight__filter-tab--active' : ''}`}
+           onClick={() => { setActiveSessionsView(!activeSessionsView); setSelectedFlight(null); }}
+           style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }} />
+          View All Active Inspections
+        </button>
+      </div>
+
+      {activeSessionsView ? (
+         <div className="find-flight__sessions-grid-wrap">
+           <h2 className="find-flight__detail-title" style={{ marginBottom: '1rem' }}>Active Inspections</h2>
+           {globalLoading && <p className="find-flight__loading">Loading inspections…</p>}
+           {!globalLoading && globalSessions.length === 0 && (
+             <p className="find-flight__loading">No active inspections found.</p>
+           )}
+           <div className="find-flight__flights-grid">
+             {globalSessions.map((s) => (
+               <div key={s.id} className="find-flight__flights-tile" style={{ cursor: 'default', paddingRight: '3rem', position: 'relative' }}>
+                 <button
+                   type="button"
+                   style={{ 
+                     position: 'absolute', 
+                     top: '0.5rem', 
+                     right: '0.5rem', 
+                     background: 'rgba(239, 68, 68, 0.2)', 
+                     color: '#fca5a5', 
+                     border: 'none', 
+                     borderRadius: '4px', 
+                     padding: '0.25rem 0.5rem',
+                     cursor: 'pointer',
+                     zIndex: 10
+                   }}
+                   onClick={async (e) => {
+                     e.stopPropagation()
+                     if (confirm('Delete this session?')) {
+                       await supabase.from('inspection_sessions').delete().eq('id', s.id)
+                     }
+                   }}
+                 >
+                   Delete
+                 </button>
+                 <button
+                   type="button"
+                   className="find-flight__flights-tile-body"
+                   style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                   onClick={() => navigate(`/dashboard?sessionId=${s.id}`)}
+                 >
+                    <span className="find-flight__flights-route" style={{ fontSize: '1.1rem' }}>
+                       {s.flight_number || 'Unknown Flight'}
+                    </span>
+                    <span className="find-flight__flights-label" style={{ color: '#60a5fa' }}>
+                       {s.progress_pct}% Complete
+                    </span>
+                    <span className="find-flight__flights-secondary">
+                      Started {formatTime(s.started_at)}
+                    </span>
+                 </button>
+               </div>
+             ))}
+           </div>
+         </div>
+      ) : (
+      <>
       <div className="find-flight__filter-row">
         <div className="find-flight__filter-tabs" role="tablist" aria-label="Time filter">
           <button
@@ -274,6 +356,27 @@ export function FindFlight() {
                   <dd>{selectedFlight.distance.toLocaleString()} km</dd>
                 </div>
               </dl>
+
+
+              {activeSessions.length > 0 && (
+                <div className="find-flight__sessions-list">
+                  <h3 className="find-flight__sessions-title">Live Inspections</h3>
+                  {activeSessions.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="find-flight__session-btn"
+                      onClick={() => navigate(`/dashboard?sessionId=${s.id}`, { state: { flight: selectedFlight } })}
+                    >
+                      <div className="find-flight__session-info">
+                        <span className="find-flight__session-status">In Progress</span>
+                        <span className="find-flight__session-meta">{s.progress_pct}% complete</span>
+                      </div>
+                      <span className="find-flight__session-join">Join →</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               type="button"
@@ -325,6 +428,8 @@ export function FindFlight() {
           ))}
         </div>
       ) : null}
+      </>
+      )}
     </main>
   )
 }
