@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import type { Flight } from '../lib/flightEngine'
+import { supabase } from '../lib/supabase'
 import { useFlights } from '../hooks/useFlights'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { RouteMap } from '../components/RouteMap'
@@ -277,7 +278,17 @@ export function FindFlight() {
             <button
               type="button"
               className="find-flight__detail-continue"
-              onClick={() => navigate('/dashboard', { state: { flight: selectedFlight } })}
+              onClick={async () => {
+                const userId = session?.user?.id
+                const flightNumber = `AA${selectedFlight.flightNumber}`
+                if (userId) {
+                  await supabase.from('user_flights').upsert(
+                    { user_id: userId, flight_number: flightNumber, selected_at: new Date().toISOString() },
+                    { onConflict: 'user_id' }
+                  )
+                }
+                navigate('/dashboard', { state: { flight: selectedFlight } })
+              }}
             >
               Continue
               <span className="find-flight__detail-continue-arrow" aria-hidden>

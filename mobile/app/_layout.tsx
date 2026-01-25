@@ -1,24 +1,44 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { useEffect } from 'react'
+import { Stack } from 'expo-router'
+import * as Linking from 'expo-linking'
+import 'react-native-reanimated'
+import { supabase } from '@/lib/supabase'
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+
+function parseOAuthUrl(url: string | null): void {
+  if (!url || !url.includes('#access_token')) return
+  const hash = url.split('#')[1]
+  if (!hash) return
+  const params = new URLSearchParams(hash)
+  const access_token = params.get('access_token')
+  const refresh_token = params.get('refresh_token')
+  if (access_token && refresh_token) {
+    supabase.auth.setSession({ access_token, refresh_token })
+  }
+}
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    Linking.getInitialURL().then(parseOAuthUrl)
+    const sub = Linking.addEventListener('url', ({ url }) => parseOAuthUrl(url))
+    return () => sub.remove()
+  }, [])
+
+  useEffect(() => {
+  }, [])
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: '#141414' },
+        animation: 'fade',
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="auth" options={{ animation: 'fade' }} />
+      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+    </Stack>
+  )
 }
