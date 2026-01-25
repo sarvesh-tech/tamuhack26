@@ -28,6 +28,7 @@ export type InspectionStepInstance = {
   transcript: string | null
   ai_severity?: 'low' | 'medium' | 'high' | null
   ai_analysis?: string | null
+  completed_by?: string | null
 }
 
 export function useInspectionSession(sessionId: string | null) {
@@ -138,7 +139,7 @@ export function useInspectionSession(sessionId: string | null) {
     const { error } = await supabase
       .from('inspection_sessions')
       .update({
-        status: 'completed', 
+        status: 'completed',
         ended_at: new Date().toISOString(),
       })
       .eq('id', sessionId)
@@ -159,8 +160,8 @@ export function useInspectionSession(sessionId: string | null) {
   );
 
   const stepsCompletedCount = uniqueSteps.filter(s => s.status === 'completed' || s.status === 'skipped').length
-  const progressPct = uniqueSteps.length > 0 
-    ? Math.round((stepsCompletedCount / (session?.total_steps || 15)) * 100) 
+  const progressPct = uniqueSteps.length > 0
+    ? Math.round((stepsCompletedCount / (session?.total_steps || 15)) * 100)
     : 0
 
   return { session, steps: uniqueSteps, loading, error, endSession, cancelSession, refresh, stepsCompleted: stepsCompletedCount, progressPct }

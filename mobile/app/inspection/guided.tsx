@@ -49,6 +49,13 @@ export default function GuidedInspectionScreen() {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.container, { paddingTop: (insets.top || 24) + 12 }]}>
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.exitBtn}
+          onPress={() => router.back()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.exitBtnText}>← Exit</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Preflight Checklist</Text>
         <Text style={styles.progressLabel}>
           {completed}/{total} steps · {pct}%
@@ -109,4 +116,6 @@ const styles = StyleSheet.create({
   itemStatusDone: { color: '#86efac' },
   itemStatusActive: { color: '#60a5fa' },
   itemArrow: { fontFamily: 'Inter_400Regular', fontSize: 18, color: '#71717a', marginLeft: 8 },
+  exitBtn: { marginBottom: 12, alignSelf: 'flex-start' },
+  exitBtnText: { fontFamily: 'Inter_500Medium', fontSize: 15, color: '#a1a1aa' },
 })

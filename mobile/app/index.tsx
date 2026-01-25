@@ -252,13 +252,30 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
               try {
                 const { data: { user } } = await supabase.auth.getUser()
                 if (!user) throw new Error('Not signed in')
+
+                // Check for existing active session first
+                const targetFlight = userFlightNumber ?? null
+                if (targetFlight) {
+                  const { data: existing } = await supabase
+                    .from('inspection_sessions')
+                    .select('id')
+                    .eq('flight_number', targetFlight)
+                    .eq('status', 'active')
+                    .maybeSingle()
+
+                  if (existing) {
+                    router.replace({ pathname: '/inspection/guided', params: { sessionId: existing.id } })
+                    return
+                  }
+                }
+
                 const { data: sessionRow, error: sessionErr } = await supabase
                   .from('inspection_sessions')
                   .insert({
                     inspector_id: user.id,
                     inspector_email: user.email ?? null,
                     inspector_name: (user.user_metadata?.full_name ?? user.user_metadata?.name) ?? null,
-                    flight_number: userFlightNumber ?? null,
+                    flight_number: targetFlight,
                   })
                   .select('id')
                   .single()
@@ -268,7 +285,21 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
                   .insert(INSPECTION_STEPS.map((s) => ({ session_id: sessionRow.id, step_id: s.id, title: s.title, status: 'pending' })))
                 if (stepsErr) throw stepsErr
                 router.replace({ pathname: '/inspection/guided', params: { sessionId: sessionRow.id } })
-              } catch (e) {
+              } catch (e: any) {
+                // Handle race condition: session created by someone else after our initial check
+                if (e?.code === '23505' && userFlightNumber) {
+                  const { data: retryExisting } = await supabase
+                    .from('inspection_sessions')
+                    .select('id')
+                    .eq('flight_number', userFlightNumber)
+                    .eq('status', 'active')
+                    .maybeSingle()
+
+                  if (retryExisting) {
+                    router.replace({ pathname: '/inspection/guided', params: { sessionId: retryExisting.id } })
+                    return
+                  }
+                }
                 setStartInspectionError(e instanceof Error ? e.message : 'Failed to start inspection')
               } finally {
                 setStartInspectionLoading(false)
