@@ -11,8 +11,11 @@ export function Landing() {
         <hr className="hero__hr" />
         <p className="hero__desc">{DESCRIPTION}</p>
       </div>
-      <div className="hero__right" aria-hidden>
-        {/* Placeholder for animated GIF */}
+      <div className="hero__right">
+        <div className="hero__img-wrapper">
+          <img src="/paper.png" alt="" className="hero__paper" />
+          <img src="/lilman.gif" alt="" className="hero__lilman" />
+        </div>
       </div>
     </main>
   )

@@ -87,8 +87,15 @@
 }
 
 @keyframes dot-flash {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.25;
+  }
 }
 
 .nav__btn {
@@ -168,7 +175,47 @@
   flex: 1;
   min-width: 200px;
   min-height: 260px;
-  /* Ready for animated GIF */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1000px;
+}
+
+.hero__img-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  animation: float-paper 6s ease-in-out infinite;
+}
+
+.hero__paper {
+  display: block;
+  width: 130%;
+  height: auto;
+  filter: drop-shadow(0 25px 50px rgba(0, 0, 0, 0.5));
+}
+
+.hero__lilman {
+  position: absolute;
+  top: 55%;
+  left: 8%;
+  transform: translate(-50%, -50%);
+  width: 45%;
+  height: auto;
+  mix-blend-mode: normal;
+  /* Ensure clear visibility */
+}
+
+@keyframes float-paper {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-15px) rotate(1deg);
+  }
 }
 
 /* ------- find-flight ------- */
@@ -381,6 +428,7 @@
     opacity: 0;
     transform: translateX(-12px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -392,6 +440,7 @@
     opacity: 0;
     transform: translateX(20px) scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: translateX(0) scale(1);
@@ -610,8 +659,13 @@
 
 /* ------ flights grid ------ */
 @keyframes gridFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .find-flight__flights-grid {
@@ -786,7 +840,7 @@
   margin-bottom: 0;
 }
 
-.dashboard__main > .dashboard__flight-info {
+.dashboard__main>.dashboard__flight-info {
   margin-bottom: 2rem;
 }
 
