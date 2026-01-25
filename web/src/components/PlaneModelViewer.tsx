@@ -34,7 +34,7 @@ function Fallback() {
 
 export function PlaneModelViewer() {
   return (
-    <div className="dashboard__canvas-inner">
+    <div className="find-flight__canvas-inner">
       <Canvas
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}

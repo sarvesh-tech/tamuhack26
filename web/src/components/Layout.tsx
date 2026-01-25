@@ -15,6 +15,7 @@ export function Layout({ session, onSignOut, onOpenAuth }: LayoutProps) {
             <img src="/IconLogo.png" alt="" className="nav__logo-img" />
           </Link>
           <nav className="nav__links">
+            <Link to="/find-flight" className="nav__link">FIND FLIGHT</Link>
             <Link to="/dashboard" className="nav__link">DASHBOARD</Link>
             <a href="#about" className="nav__link">ABOUT</a>
             <a href="#demo" className="nav__link">DEMO</a>

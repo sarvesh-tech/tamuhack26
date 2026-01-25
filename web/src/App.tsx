@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { Layout } from './components/Layout'
 import { Landing } from './pages/Landing'
+import { FindFlight } from './pages/FindFlight'
 import { Dashboard } from './pages/Dashboard'
 import './App.css'
 
@@ -31,8 +32,8 @@ function App() {
 
   useEffect(() => {
     if (!authReady) return
-    if (session && location.pathname === '/') navigate('/dashboard', { replace: true })
-    if (!session && location.pathname === '/dashboard') navigate('/', { replace: true })
+    if (session && location.pathname === '/') navigate('/find-flight', { replace: true })
+    if (!session && (location.pathname === '/find-flight' || location.pathname === '/dashboard')) navigate('/', { replace: true })
   }, [authReady, session, location.pathname, navigate])
 
   async function signInWithGoogle() {
@@ -78,6 +79,7 @@ function App() {
       <Routes>
         <Route element={<Layout session={session} onSignOut={signOut} onOpenAuth={() => setAuthOpen(true)} />}>
           <Route path="/" element={<Landing />} />
+          <Route path="/find-flight" element={<FindFlight />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Route>
       </Routes>

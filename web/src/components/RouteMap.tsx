@@ -21,12 +21,12 @@ export function RouteMap({ origin, destination }: RouteMapProps) {
   const d: [number, number] = [destination.location.latitude, destination.location.longitude]
 
   return (
-    <div className="dashboard__route-map">
+    <div className="find-flight__route-map">
       <MapContainer
         center={o}
         zoom={3}
         scrollWheelZoom={false}
-        className="dashboard__route-map-inner"
+        className="find-flight__route-map-inner"
         style={{ height: '100%', width: '100%', borderRadius: 8 }}
       >
         <TileLayer
