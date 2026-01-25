@@ -9,6 +9,7 @@ This app uses the **same Supabase project as the web app** so sign-in is shared 
 - Copy `.env.local` from the project root or create it with:
   - `EXPO_PUBLIC_SUPABASE_URL` = your Supabase project URL
   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` = your Supabase anon key
+  - `EXPO_PUBLIC_FLIGHT_ENGINE_BASE_URL` = (optional) Flight Engine API base, e.g. `https://flight-engine-jek1.onrender.com`. Defaults to that URL if unset.
 
 - **Google sign-in:** Add the OAuth redirect URL in [Supabase Dashboard](https://supabase.com/dashboard) → Authentication → URL Configuration → Redirect URLs:
   - For **Expo Go:** run the app once and check the terminal for the dev URL, or add `exp://*` (or your `Linking.createURL('auth/callback')` value).

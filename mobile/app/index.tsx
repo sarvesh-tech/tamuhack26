@@ -23,6 +23,7 @@ import * as Linking from 'expo-linking'
 import type { Session } from '@supabase/supabase-js'
 import Svg, { Path } from 'react-native-svg'
 import { supabase } from '@/lib/supabase'
+import { getFlights, type Flight } from '@/lib/flightEngine'
 
 const PRE_HEADLINE = 'REAL-TIME INSPECTION VERIFICATION FOR FLIGHT OPERATIONS.'
 
@@ -46,6 +47,135 @@ function GoogleIcon() {
         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
       />
     </Svg>
+  )
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+  const [userFlightNumber, setUserFlightNumber] = useState<string | null>(null)
+  const [flight, setFlight] = useState<Flight | null>(null)
+  const [flightLoading, setFlightLoading] = useState(true)
+  const [flightError, setFlightError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || cancelled) return
+      const { data: row } = await supabase
+        .from('user_flights')
+        .select('flight_number')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (cancelled) return
+      const fn = row?.flight_number ?? null
+      setUserFlightNumber(fn)
+      if (!fn) {
+        setFlightLoading(false)
+        return
+      }
+      setFlightError(null)
+      try {
+        let list = await getFlights(undefined, fn)
+        if (list.length === 0 && fn.startsWith('AA')) {
+          list = await getFlights(undefined, fn.slice(2))
+        }
+        if (!cancelled) setFlight(list[0] ?? null)
+      } catch (e) {
+        if (!cancelled) setFlightError(e instanceof Error ? e.message : 'Failed to load flight')
+      } finally {
+        if (!cancelled) setFlightLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="light" />
+      <ScrollView
+        contentContainerStyle={styles.signedInScroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.signedIn}>
+          <Image
+            source={require('@/assets/images/TextLogo.png')}
+            style={styles.logoSmall}
+            resizeMode="contain"
+          />
+          <Text style={styles.signedInTitle}>You’re signed in</Text>
+          <Text style={styles.signedInEmail} numberOfLines={1}>
+            {email}
+          </Text>
+
+          {flightLoading && (
+            <View style={styles.flightCard}>
+              <ActivityIndicator size="small" color="#a1a1aa" />
+              <Text style={styles.flightCardLoading}>Loading flight…</Text>
+            </View>
+          )}
+
+          {!flightLoading && flight && (
+            <View style={styles.flightCard}>
+              <Text style={styles.flightCardTitle}>AA{flight.flightNumber}</Text>
+              <Text style={styles.flightCardRoute}>
+                {flight.origin.code} → {flight.destination.code}
+              </Text>
+              <Text style={styles.flightCardCities}>
+                {flight.origin.city} to {flight.destination.city}
+              </Text>
+              <View style={styles.flightCardRow}>
+                <Text style={styles.flightCardLabel}>Departure</Text>
+                <Text style={styles.flightCardValue}>{formatDateTime(flight.departureTime)}</Text>
+              </View>
+              <View style={styles.flightCardRow}>
+                <Text style={styles.flightCardLabel}>Arrival</Text>
+                <Text style={styles.flightCardValue}>{formatDateTime(flight.arrivalTime)}</Text>
+              </View>
+              <View style={styles.flightCardRow}>
+                <Text style={styles.flightCardLabel}>Aircraft</Text>
+                <Text style={styles.flightCardValue}>{flight.aircraft.model}</Text>
+              </View>
+              <View style={styles.flightCardRow}>
+                <Text style={styles.flightCardLabel}>Duration</Text>
+                <Text style={styles.flightCardValue}>{flight.duration.locale}</Text>
+              </View>
+            </View>
+          )}
+
+          {!flightLoading && userFlightNumber && !flight && !flightError && (
+            <View style={styles.flightCard}>
+              <Text style={styles.flightCardTitle}>{userFlightNumber}</Text>
+              <Text style={styles.flightCardMuted}>Details unavailable for this date</Text>
+            </View>
+          )}
+
+          {!flightLoading && flightError && (
+            <View style={styles.flightCard}>
+              <Text style={styles.flightCardMuted}>{flightError}</Text>
+            </View>
+          )}
+
+          {!flightLoading && !userFlightNumber && (
+            <View style={styles.flightCard}>
+              <Text style={styles.flightCardMuted}>No flight selected. Choose one on the web app.</Text>
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut}>
+            <Text style={styles.signOutBtnText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   )
 }
 
@@ -134,23 +264,10 @@ export default function AuthScreen() {
 
   if (session?.user) {
     return (
-      <View style={styles.container}>
-        <StatusBar style="light" />
-        <View style={styles.signedIn}>
-          <Image
-            source={require('@/assets/images/TextLogo.png')}
-            style={styles.logoSmall}
-            resizeMode="contain"
-          />
-          <Text style={styles.signedInTitle}>You’re signed in</Text>
-          <Text style={styles.signedInEmail} numberOfLines={1}>
-            {session.user.email}
-          </Text>
-          <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
-            <Text style={styles.signOutBtnText}>Sign out</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <SignedInScreen
+        email={session.user.email ?? ''}
+        onSignOut={signOut}
+      />
     )
   }
 
@@ -354,11 +471,15 @@ const styles = StyleSheet.create({
   },
   msgSuccessText: { color: '#86efac' },
   msgErrorText: { color: '#fca5a5' },
+  signedInScroll: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 48,
+    paddingBottom: 32,
+  },
   signedIn: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 8,
   },
   logoSmall: {
     width: 180,
@@ -375,7 +496,61 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
     color: '#a1a1aa',
-    marginBottom: 24,
+    marginBottom: 20,
+  },
+  flightCard: {
+    alignSelf: 'stretch',
+    backgroundColor: '#1c1c1e',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 14,
+    padding: 20,
+    marginBottom: 20,
+  },
+  flightCardTitle: {
+    fontFamily: 'SpaceGrotesk_600SemiBold',
+    fontSize: 18,
+    color: '#fafafa',
+    marginBottom: 8,
+  },
+  flightCardRoute: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    color: '#e4e4e7',
+    marginBottom: 4,
+  },
+  flightCardCities: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: '#a1a1aa',
+    marginBottom: 14,
+  },
+  flightCardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  flightCardLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: '#71717a',
+  },
+  flightCardValue: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: '#e4e4e7',
+  },
+  flightCardLoading: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: '#a1a1aa',
+    marginTop: 8,
+  },
+  flightCardMuted: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: '#a1a1aa',
   },
   signOutBtn: {
     paddingVertical: 12,
