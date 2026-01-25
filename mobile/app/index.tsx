@@ -68,6 +68,11 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
   const [flightError, setFlightError] = useState<string | null>(null)
   const [startInspectionLoading, setStartInspectionLoading] = useState(false)
   const [startInspectionError, setStartInspectionError] = useState<string | null>(null)
+  
+  const [activeSessions, setActiveSessions] = useState<any[]>([])
+  const [activeSessionsLoading, setActiveSessionsLoading] = useState(false)
+  const [role, setRole] = useState<string | null>(null)
+  const [showRoleModal, setShowRoleModal] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -97,14 +102,57 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
         if (!cancelled) setFlightError(e instanceof Error ? e.message : 'Failed to load flight')
       } finally {
         if (!cancelled) setFlightLoading(false)
+        if (fn) {
+           setActiveSessionsLoading(true)
+           const { data: sessions } = await supabase
+             .from('inspection_sessions')
+             .select('id, started_at, progress_pct, inspector_name')
+             .eq('flight_number', fn) // Query by flight number
+             .eq('status', 'active')
+             .order('started_at', { ascending: false })
+           if (!cancelled) {
+              setActiveSessions(sessions || [])
+              setActiveSessionsLoading(false)
+           }
+        }
       }
     }
     load()
     return () => { cancelled = true }
   }, [])
 
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (user) {
+        const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        if (data?.role) setRole(data.role)
+        else setShowRoleModal(true)
+      }
+    })
+  }, [])
+  
   return (
     <View style={styles.container}>
+      {showRoleModal && (
+        <View style={[styles.container, { position: 'absolute', zIndex: 100, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', padding: 20 }]}>
+          <Text style={styles.signedInTitle}>Select your role</Text>
+          {['Pilot', 'Flight Attendant', 'Mechanic', 'Ground Crew'].map((r) => (
+             <TouchableOpacity
+               key={r}
+               style={[styles.flightCard, { alignItems: 'center' }]}
+               onPress={async () => {
+                 const { data: { user } } = await supabase.auth.getUser()
+                 if (!user) return
+                 await supabase.from('profiles').upsert({ id: user.id, role: r })
+                 setRole(r)
+                 setShowRoleModal(false)
+               }}
+             >
+               <Text style={styles.flightCardTitle}>{r}</Text>
+             </TouchableOpacity>
+          ))}
+        </View>
+      )}
       <StatusBar style="light" />
       <ScrollView
         contentContainerStyle={styles.signedInScroll}
@@ -116,7 +164,7 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
             style={styles.logoSmall}
             resizeMode="contain"
           />
-          <Text style={styles.signedInTitle}>You’re signed in</Text>
+          <Text style={styles.signedInTitle}>You’re signed in {role ? `as ${role}` : ''}</Text>
           <Text style={styles.signedInEmail} numberOfLines={1}>
             {email}
           </Text>
@@ -173,6 +221,25 @@ function SignedInScreen({ email, onSignOut }: { email: string; onSignOut: () => 
             <View style={styles.flightCard}>
               <Text style={styles.flightCardMuted}>No flight selected. Choose one on the web app.</Text>
             </View>
+          )}
+
+          {!flightLoading && activeSessions.length > 0 && (
+             <View style={{ marginBottom: 20 }}>
+               <Text style={styles.flightCardTitle}>Active Inspections</Text>
+               {activeSessions.map(s => (
+                 <TouchableOpacity 
+                   key={s.id} 
+                   style={styles.flightCard} 
+                   onPress={() => router.push({ pathname: '/inspection/guided', params: { sessionId: s.id } })}
+                 >
+                   <View style={styles.flightCardRow}>
+                      <Text style={styles.flightCardLabel}>{s.inspector_name || 'Inspector'}</Text>
+                      <Text style={[styles.flightCardValue, { color: '#60a5fa' }]}>{s.progress_pct}%</Text>
+                   </View>
+                   <Text style={{ color: '#fafafa', marginTop: 8, fontFamily: 'Inter_500Medium' }}>Join →</Text>
+                 </TouchableOpacity>
+               ))}
+             </View>
           )}
 
           <TouchableOpacity

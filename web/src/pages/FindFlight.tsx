@@ -190,16 +190,50 @@ export function FindFlight() {
                      borderRadius: '4px', 
                      padding: '0.25rem 0.5rem',
                      cursor: 'pointer',
-                     zIndex: 10
+                     zIndex: 10,
+                     fontSize: '1.2rem',
+                     lineHeight: '1rem',
+                     width: '24px',
+                     height: '24px',
+                     display: 'flex',
+                     alignItems: 'center',
+                     justifyContent: 'center'
                    }}
                    onClick={async (e) => {
                      e.stopPropagation()
-                     if (confirm('Delete this session?')) {
-                       await supabase.from('inspection_sessions').delete().eq('id', s.id)
+                     // Check existing votes
+                     const { data: { user } } = await supabase.auth.getUser()
+                     if (!user) return
+
+                     // Check if already voted
+                     const { data: myVote } = await supabase.from('session_delete_votes')
+                       .select('user_id')
+                       .eq('session_id', s.id)
+                       .eq('user_id', user.id)
+                       .maybeSingle()
+                     
+                     if (myVote) {
+                        alert('You have already voted to delete this session.')
+                        return
+                     }
+
+                     if (confirm('Vote to delete this session? (Requires 3 votes)')) {
+                       await supabase.from('session_delete_votes').insert({ session_id: s.id, user_id: user.id })
+                       
+                       // Check total votes
+                       const { count } = await supabase.from('session_delete_votes')
+                         .select('*', { count: 'exact', head: true })
+                         .eq('session_id', s.id)
+                       
+                       if ((count ?? 0) >= 3) {
+                          await supabase.from('inspection_sessions').delete().eq('id', s.id)
+                       } else {
+                          alert(`Vote cast. ${(count ?? 0)}/3 votes needed.`)
+                       }
                      }
                    }}
                  >
-                   Delete
+                   ×
                  </button>
                  <button
                    type="button"
