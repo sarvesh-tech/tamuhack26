@@ -674,61 +674,6 @@ export function Dashboard() {
           </div>
         </div>
 
-        {activeTab === "overview" && sessionId && (
-          <section className="status-dashboard" style={{ padding: '0 2rem' }}>
-            <div className={`status-banner ${displayProgressPct === 100 ? 'status-banner--operational' :
-              displayProgressPct > 0 ? 'status-banner--info' : 'status-banner--info'
-              }`}>
-              <span>
-                {displayProgressPct === 100 ? 'All Systems Operational' :
-                  displayProgressPct > 80 ? 'Ready for Pushback' :
-                    displayProgressPct > 50 ? 'Final Safety Checks in Progress' :
-                      displayProgressPct > 20 ? 'Boarding in Progress' : 'Initial Cabin Preparation'}
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div className="nav__active-dot" style={{ backgroundColor: displayProgressPct === 100 ? '#4ade80' : '#60a5fa' }} />
-                <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>Live Inspection Status</span>
-              </div>
-            </div>
-
-            {[
-              { name: 'Emergency & Safety Systems', range: [1, 4] },
-              { name: 'Cabin Readiness & Configuration', range: [5, 7] },
-              { name: 'Structural Integrity & Galleys', range: [8, 10] },
-              { name: 'Flight Deck Communication', range: [11, 15] }
-            ].map((cat) => {
-              const catSteps = steps.filter(s => s.step_id >= cat.range[0] && s.step_id <= cat.range[1]);
-              const completedCount = catSteps.filter(s => s.status === 'completed' || s.status === 'skipped').length;
-              const totalCount = cat.range[1] - cat.range[0] + 1;
-              const isOperational = completedCount === totalCount;
-
-              return (
-                <div key={cat.name} className="system-row">
-                  <div className="system-row__header">
-                    <span className="system-row__name">{cat.name}</span>
-                    <span className={`system-row__status ${isOperational ? 'system-row__status--operational' : 'system-row__status--pending'}`}>
-                      {isOperational ? 'Operational' : `${completedCount}/${totalCount} Verified`}
-                    </span>
-                  </div>
-                  <div className="uptime-bar">
-                    {Array.from({ length: totalCount }).map((_, i) => {
-                      const stepId = cat.range[0] + i;
-                      const step = steps.find(s => s.step_id === stepId);
-                      const statusClass = step?.status === 'completed' ? 'uptime-bar__segment--complete' :
-                        step?.status === 'skipped' ? 'uptime-bar__segment--skipped' :
-                          'uptime-bar__segment--pending';
-                      return <div key={i} className={`uptime-bar__segment ${statusClass}`} title={step?.title || `Step ${stepId}`} />;
-                    })}
-                  </div>
-                  <div className="uptime-legend">
-                    <span>Inspection Start</span>
-                    <span>100% Prepared</span>
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        )}
 
         {activeTab === "overview" ? (
           <div className="dashboard__overview-wrap">
@@ -1081,17 +1026,76 @@ export function Dashboard() {
               </section>
             )}
             {activeTab === "inspections" && (
-              <section
-                className="dashboard__panel"
-                aria-label="Inspections"
-              >
-                <h2 className="dashboard__panel-title">
-                  Inspections
-                </h2>
-                <p className="dashboard__panel-empty">
-                  Inspection records will appear here.
-                </p>
-              </section>
+              <>
+                {!sessionId && (
+                  <section
+                    className="dashboard__panel"
+                    aria-label="Inspections"
+                  >
+                    <h2 className="dashboard__panel-title">
+                      Inspections
+                    </h2>
+                    <p className="dashboard__panel-empty">
+                      Select an inspection to view status.
+                    </p>
+                  </section>
+                )}
+                {sessionId && (
+                  <section className="status-dashboard" style={{ padding: '0 2rem', marginTop: '1rem' }}>
+                    <div className={`status-banner ${displayProgressPct === 100 ? 'status-banner--operational' :
+                      displayProgressPct > 0 ? 'status-banner--info' : 'status-banner--info'
+                      }`}>
+                      <span>
+                        {displayProgressPct === 100 ? 'All Systems Operational' :
+                          displayProgressPct > 80 ? 'Ready for Pushback' :
+                            displayProgressPct > 50 ? 'Final Safety Checks in Progress' :
+                              displayProgressPct > 20 ? 'Boarding in Progress' : 'Initial Cabin Preparation'}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div className="nav__active-dot" style={{ backgroundColor: displayProgressPct === 100 ? '#4ade80' : '#60a5fa' }} />
+                        <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>Live Inspection Status</span>
+                      </div>
+                    </div>
+
+                    {[
+                      { name: 'Emergency & Safety Systems', range: [1, 4] },
+                      { name: 'Cabin Readiness & Configuration', range: [5, 7] },
+                      { name: 'Structural Integrity & Galleys', range: [8, 10] },
+                      { name: 'Flight Deck Communication', range: [11, 15] }
+                    ].map((cat) => {
+                      const catSteps = steps.filter(s => s.step_id >= cat.range[0] && s.step_id <= cat.range[1]);
+                      const completedCount = catSteps.filter(s => s.status === 'completed' || s.status === 'skipped').length;
+                      const totalCount = cat.range[1] - cat.range[0] + 1;
+                      const isOperational = completedCount === totalCount;
+
+                      return (
+                        <div key={cat.name} className="system-row">
+                          <div className="system-row__header">
+                            <span className="system-row__name">{cat.name}</span>
+                            <span className={`system-row__status ${isOperational ? 'system-row__status--operational' : 'system-row__status--pending'}`}>
+                              {isOperational ? 'Operational' : `${completedCount}/${totalCount} Verified`}
+                            </span>
+                          </div>
+                          <div className="uptime-bar">
+                            {Array.from({ length: totalCount }).map((_, i) => {
+                              const stepId = cat.range[0] + i;
+                              const step = steps.find(s => s.step_id === stepId);
+                              const statusClass = step?.status === 'completed' ? 'uptime-bar__segment--complete' :
+                                step?.status === 'skipped' ? 'uptime-bar__segment--skipped' :
+                                  'uptime-bar__segment--pending';
+                              return <div key={i} className={`uptime-bar__segment ${statusClass}`} title={step?.title || `Step ${stepId}`} />;
+                            })}
+                          </div>
+                          <div className="uptime-legend">
+                            <span>Inspection Start</span>
+                            <span>100% Prepared</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </section>
+                )}
+              </>
             )}
           </>
         )}
